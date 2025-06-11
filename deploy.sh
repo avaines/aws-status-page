@@ -68,7 +68,6 @@ echo ""
 echo "Stack Outputs:"
 echo "$OUTPUTS"
 
-
 STATUS_PAGE_URL=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
@@ -81,12 +80,11 @@ RSS_FEED_URL=$(aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[?OutputKey==`RSSFeedUrl`].OutputValue' \
     --output text)
 
-API_GATEWAY_URL=$(aws cloudformation describe-stacks \
+WEBHOOK_URL=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
-    --query 'Stacks[0].Outputs[?OutputKey==`ApiGatewayUrl`].OutputValue' \
+    --query 'Stacks[0].Outputs[?OutputKey==`WebhookUrl`].OutputValue' \
     --output text)
-
 
 echo ""
 echo -e "${GREEN}Your status page is now live at:${NC}"
@@ -96,7 +94,7 @@ echo -e "${GREEN}RSS Feed URL:${NC}"
 echo "   $RSS_FEED_URL"
 echo ""
 echo -e "${GREEN}Webhook API URL:${NC}"
-echo "   $API_GATEWAY_URL/webhook"
+echo "   $WEBHOOK_URL"
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 echo "1. Visit your status page to verify it's working"

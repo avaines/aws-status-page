@@ -75,8 +75,14 @@ exports.handler = async (event) => {
     // Generate HTML page
     const html = generateStatusPage(services, overallStatus, recentIncidents);
 
-    // Upload to S3
-    await uploadToS3(html);
+    // Generate RSS feed
+    const rssXml = generateRSSFeed(recentIncidents);
+
+    // Upload both HTML and RSS to S3
+    await Promise.all([
+      uploadToS3('index.html', html, 'text/html'),
+      uploadToS3('rss.xml', rssXml, 'application/rss+xml')
+    ]);
 
     // Invalidate CloudFront cache
     await invalidateCloudFront();
@@ -90,7 +96,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Status page updated successfully',
+        message: 'Status page and RSS feed updated successfully',
         services: services.length,
         overallStatus: overallStatus.status,
         alarmsProcessed: alarms.length,
@@ -346,6 +352,7 @@ async function getRecentIncidents() {
 
 function generateStatusPage(services, overallStatus, recentIncidents) {
   const timestamp = new Date().toLocaleString();
+  const rssUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}/rss.xml`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -356,6 +363,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="description" content="Real-time status updates for ${SERVICE_NAME} services">
     <meta name="robots" content="index, follow">
+    <link rel="alternate" type="application/rss+xml" title="${SERVICE_NAME} Status Updates" href="${rssUrl}">
 </head>
 <body class="min-h-screen bg-gray-50">
     <!-- Header -->
@@ -370,7 +378,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                 </div>
 
                 <nav class="flex items-center space-x-6">
-                    <a href="/rss" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
+                    <a href="${rssUrl}" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"/>
                         </svg>
@@ -517,6 +525,94 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
 </html>`;
 }
 
+function generateRSSFeed(recentIncidents) {
+  const now = new Date().toUTCString();
+  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}`;
+
+  const rssItems = recentIncidents.map(item => {
+    const date = new Date(item.timestamp).toUTCString();
+    const title = getStatusTitle(item);
+    const description = getStatusDescription(item);
+
+    return `
+    <item>
+      <title>${escapeXml(title)}</title>
+      <description>${escapeXml(description)}</description>
+      <pubDate>${date}</pubDate>
+      <link>${statusPageUrl}</link>
+      <guid isPermaLink="false">${item.serviceId}-${item.timestamp}</guid>
+    </item>`;
+  }).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(SERVICE_NAME)} - Status Updates</title>
+    <description>Real-time status updates for ${escapeXml(SERVICE_NAME)} (Data retained for ${DATA_RETENTION_DAYS} days)</description>
+    <link>${statusPageUrl}</link>
+    <lastBuildDate>${now}</lastBuildDate>
+    <language>en-us</language>
+    <generator>AWS Lambda Status Page</generator>
+    <ttl>5</ttl>
+    ${rssItems}
+  </channel>
+</rss>`;
+}
+
+function getStatusTitle(item) {
+  const statusLabels = {
+    operational: 'Operational',
+    degraded: 'Degraded Performance',
+    partial_outage: 'Partial Outage',
+    major_outage: 'Major Outage',
+    maintenance: 'Scheduled Maintenance'
+  };
+
+  const statusLabel = statusLabels[item.status] || item.status;
+
+  if (item.serviceId === 'overall') {
+    return `System Status: ${statusLabel}`;
+  } else {
+    return `${item.serviceId}: ${statusLabel}`;
+  }
+}
+
+function getStatusDescription(item) {
+  let description = item.message || '';
+
+  if (item.description) {
+    description += description ? ` - ${item.description}` : item.description;
+  }
+
+  if (!description) {
+    if (item.serviceId === 'overall') {
+      description = `Overall system status changed to ${item.status}`;
+    } else {
+      description = `Service ${item.serviceId} status changed to ${item.status}`;
+    }
+  }
+
+  // Add TTL information if available
+  if (item.ttl) {
+    const expiryDate = new Date(item.ttl * 1000);
+    description += ` (Data expires: ${expiryDate.toISOString()})`;
+  }
+
+  return description;
+}
+
+function escapeXml(unsafe) {
+  return unsafe.replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
 function getStatusIcon(status) {
   const icons = {
     operational: '<svg fill="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
@@ -548,17 +644,17 @@ function getServiceIcon(serviceName) {
   return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>';
 }
 
-async function uploadToS3(html) {
+async function uploadToS3(key, content, contentType) {
   const params = {
     Bucket: STATUS_BUCKET,
-    Key: 'index.html',
-    Body: html,
-    ContentType: 'text/html',
-    CacheControl: 'max-age=300'
+    Key: key,
+    Body: content,
+    ContentType: contentType,
+    CacheControl: contentType === 'text/html' ? 'max-age=300' : 'max-age=3600'
   };
 
   await s3.putObject(params).promise();
-  console.log('Status page uploaded to S3');
+  console.log(`${key} uploaded to S3`);
 }
 
 async function invalidateCloudFront() {
@@ -571,8 +667,8 @@ async function invalidateCloudFront() {
     DistributionId: CLOUDFRONT_DISTRIBUTION_ID,
     InvalidationBatch: {
       Paths: {
-        Quantity: 1,
-        Items: ['/*']
+        Quantity: 2,
+        Items: ['/index.html', '/rss.xml']
       },
       CallerReference: Date.now().toString()
     }
@@ -580,7 +676,7 @@ async function invalidateCloudFront() {
 
   try {
     await cloudfront.createInvalidation(params).promise();
-    console.log('CloudFront cache invalidated');
+    console.log('CloudFront cache invalidated for both HTML and RSS');
   } catch (error) {
     console.error('Error invalidating CloudFront cache:', error);
   }

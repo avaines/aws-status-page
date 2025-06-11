@@ -14,9 +14,9 @@ The status page uses a fully serverless architecture with the following AWS serv
 
 - **CloudWatch Alarms**: Monitor your services and trigger status updates
 - **Lambda Functions**: Process alarms, generate status pages, handle webhooks
-- **API Gateway**: REST endpoints for webhooks and RSS feeds
+- **API Gateway**: REST endpoint for webhooks only
 - **DynamoDB**: Store status history with automatic TTL expiration
-- **S3**: Host static status page files (private bucket)
+- **S3**: Host static status page files and RSS feed (private bucket)
 - **CloudFront**: Global CDN with security headers and caching
 - **SNS**: Email notifications for status changes
 - **EventBridge**: Scheduled status page updates every 5 minutes
@@ -26,7 +26,7 @@ The status page uses a fully serverless architecture with the following AWS serv
 - **Automatic Monitoring**: Integrates with CloudWatch alarms to automatically detect service issues
 - **Beautiful UI**: Professional status page design similar to GitHub Status, Atlassian Status Page
 - **Real-time Updates**: Automatically updates when CloudWatch alarms change state
-- **RSS Feed**: Subscribe to status updates via RSS
+- **RSS Feed**: Subscribe to status updates via RSS (hosted on S3/CloudFront)
 - **Webhook API**: Manually update service status via REST API
 - **Email Notifications**: Get notified when service status changes
 - **Responsive Design**: Works perfectly on desktop and mobile devices
@@ -81,7 +81,7 @@ The status page automatically monitors CloudWatch alarms that have this Lambda f
 1. **Discovers Services**: Scans CloudWatch alarms that reference the status generator Lambda
 2. **Groups by Service**: Organizes alarms by service name (extracted from alarm names)
 3. **Calculates Status**: Determines overall system status based on alarm states
-4. **Generates Page**: Creates and uploads the updated HTML status page
+4. **Generates Content**: Creates and uploads both HTML status page and RSS feed
 5. **Invalidates Cache**: Clears CloudFront cache for immediate updates
 6. **Stores History**: Saves status data in DynamoDB with TTL
 7. **Sends Notifications**: Emails alerts if status changed
@@ -121,7 +121,7 @@ curl -X POST https://your-api-gateway-url/webhook \
 
 ### RSS Feed
 
-Subscribe to status updates at: `https://your-api-gateway-url/rss`
+The RSS feed is automatically generated and hosted at: `https://your-cloudfront-domain/rss.xml`
 
 ## Data Management & TTL
 
@@ -247,6 +247,7 @@ Total: ~$0.12/month
 - **🚫 No KMS**: SNS uses default encryption to avoid KMS costs
 - **🚫 No PITR**: DynamoDB Point-in-Time Recovery disabled by default
 - **🚫 No Logging**: CloudFront access logging disabled to save costs
+- **📡 Simplified API**: Only webhook endpoint, RSS served from S3
 
 ## Troubleshooting
 
@@ -268,8 +269,14 @@ Total: ~$0.12/month
 3. Look for SNS delivery failures in CloudWatch
 4. Ensure Lambda has SNS publish permissions
 
+### RSS feed not accessible
+1. Check that both index.html and rss.xml are uploaded to S3
+2. Verify CloudFront invalidation includes both files
+3. Test direct S3 access (should be denied - this confirms security)
+4. Check CloudFront distribution configuration
+
 ### CloudFront not serving latest content
-1. The Lambda function automatically invalidates the cache
+1. The Lambda function automatically invalidates the cache for both HTML and RSS
 2. You can manually invalidate using the AWS Console
 3. Check the CloudFront distribution configuration
 4. Verify S3 bucket policy allows CloudFront access
@@ -286,7 +293,7 @@ npm install
 # Test Lambda functions locally
 sam local invoke StatusPageGeneratorFunction --event events/cloudwatch-alarm.json
 
-# Start local API Gateway
+# Start local API Gateway (webhook only)
 sam local start-api
 ```
 
@@ -295,9 +302,8 @@ sam local start-api
 ```
 ├── template.yaml              # SAM template with all AWS resources
 ├── lambda/                    # Lambda function code
-│   ├── statusGenerator.js     # Main status page generator
+│   ├── statusGenerator.js     # Main status page and RSS generator
 │   ├── webhook.js            # Webhook API handler
-│   ├── rssFeed.js            # RSS feed generator
 │   ├── initialDeploy.js      # Initial deployment handler
 │   └── package.json          # Node.js dependencies
 ├── docs/
@@ -346,4 +352,4 @@ For issues and questions:
 
 Built with ❤️ using AWS SAM and serverless technologies.
 
-**Key Features**: Automatic service discovery • TTL data management • Cost-optimized • Production-ready • Fully serverless
+**Key Features**: Automatic service discovery • TTL data management • Cost-optimized • Production-ready • Fully serverless • Integrated RSS feed

@@ -297,7 +297,6 @@ Resources:
           Properties:
             Schedule: rate(5 minutes)
             Description: 'Update status page every 5 minutes'
-      # Removed DLQ to save costs
 
   # Lambda function for handling webhook updates
   StatusWebhookFunction:
@@ -318,36 +317,16 @@ Resources:
             Method: post
             RestApiId: !Ref StatusPageApi
 
-  # API Gateway for webhook endpoints (minimal configuration)
+  # API Gateway for webhook endpoints only (minimal configuration)
   StatusPageApi:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub '${AWS::StackName}-status-api'
       StageName: !Ref Environment
       Cors:
-        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowMethods: "'POST,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
-      # Removed access logging to save costs
-
-  # RSS Feed Lambda Function
-  RSSFeedFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-rss-feed'
-      CodeUri: lambda/
-      Handler: rssFeed.handler
-      Role: !GetAtt StatusPageLambdaRole.Arn
-      Environment:
-        Variables:
-          STATUS_TABLE: !Ref ServiceStatusTable
-      Events:
-        ApiGateway:
-          Type: Api
-          Properties:
-            Path: /rss
-            Method: get
-            RestApiId: !Ref StatusPageApi
 
   # Lambda function for initial deployment
   InitialDeployFunction:
@@ -378,6 +357,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-StatusPageUrl'
 
+  RSSFeedUrl:
+    Description: 'RSS Feed URL (via CloudFront)'
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}/rss.xml'
+    Export:
+      Name: !Sub '${AWS::StackName}-RSSFeedUrl'
+
   StatusPageBucket:
     Description: 'S3 Bucket hosting the status page'
     Value: !Ref StatusPageBucket
@@ -402,11 +387,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
 
-  RSSFeedUrl:
-    Description: 'RSS Feed URL'
-    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/rss'
+  WebhookUrl:
+    Description: 'Webhook endpoint URL'
+    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/webhook'
     Export:
-      Name: !Sub '${AWS::StackName}-RSSFeedUrl'
+      Name: !Sub '${AWS::StackName}-WebhookUrl'
 
   DynamoDBTable:
     Description: 'DynamoDB table for service status'

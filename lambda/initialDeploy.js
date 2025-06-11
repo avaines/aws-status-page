@@ -13,9 +13,13 @@ exports.handler = async (event, context) => {
     if (event.RequestType === 'Create' || event.RequestType === 'Update') {
       // Create initial status page
       const html = generateInitialStatusPage();
+      const rssXml = generateInitialRSSFeed();
 
-      // Upload to S3
-      await uploadToS3(BucketName, html);
+      // Upload both HTML and RSS to S3
+      await Promise.all([
+        uploadToS3(BucketName, 'index.html', html, 'text/html'),
+        uploadToS3(BucketName, 'rss.xml', rssXml, 'application/rss+xml')
+      ]);
 
       // Invalidate CloudFront cache if distribution exists
       if (DistributionId) {
@@ -23,7 +27,7 @@ exports.handler = async (event, context) => {
       }
 
       await sendResponse(event, context, 'SUCCESS', {
-        Message: 'Initial status page deployed successfully'
+        Message: 'Initial status page and RSS feed deployed successfully'
       });
 
     } else if (event.RequestType === 'Delete') {
@@ -53,6 +57,7 @@ function generateInitialStatusPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${serviceName} - Service Status</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="alternate" type="application/rss+xml" title="${serviceName} Status Updates" href="/rss.xml">
 </head>
 <body class="min-h-screen bg-gray-50">
     <!-- Header -->
@@ -67,7 +72,7 @@ function generateInitialStatusPage() {
                 </div>
 
                 <nav class="flex items-center space-x-6">
-                    <a href="/rss" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
+                    <a href="/rss.xml" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"/>
                         </svg>
@@ -149,17 +154,55 @@ function generateInitialStatusPage() {
 </html>`;
 }
 
-async function uploadToS3(bucketName, html) {
+function generateInitialRSSFeed() {
+  const serviceName = process.env.SERVICE_NAME || 'My Service';
+  const now = new Date().toUTCString();
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(serviceName)} - Status Updates</title>
+    <description>Real-time status updates for ${escapeXml(serviceName)}</description>
+    <link>https://your-status-page.com</link>
+    <lastBuildDate>${now}</lastBuildDate>
+    <language>en-us</language>
+    <generator>AWS Lambda Status Page</generator>
+    <ttl>5</ttl>
+    
+    <item>
+      <title>Status Page Deployed</title>
+      <description>Your AWS status page has been successfully deployed and is ready to monitor your services.</description>
+      <pubDate>${now}</pubDate>
+      <link>https://your-status-page.com</link>
+      <guid isPermaLink="false">initial-deployment-${Date.now()}</guid>
+    </item>
+  </channel>
+</rss>`;
+}
+
+function escapeXml(unsafe) {
+  return unsafe.replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
+async function uploadToS3(bucketName, key, content, contentType) {
   const params = {
     Bucket: bucketName,
-    Key: 'index.html',
-    Body: html,
-    ContentType: 'text/html',
-    CacheControl: 'max-age=300'
+    Key: key,
+    Body: content,
+    ContentType: contentType,
+    CacheControl: contentType === 'text/html' ? 'max-age=300' : 'max-age=3600'
   };
 
   await s3.putObject(params).promise();
-  console.log('Initial status page uploaded to S3');
+  console.log(`${key} uploaded to S3`);
 }
 
 async function invalidateCloudFront(distributionId) {
@@ -167,8 +210,8 @@ async function invalidateCloudFront(distributionId) {
     DistributionId: distributionId,
     InvalidationBatch: {
       Paths: {
-        Quantity: 1,
-        Items: ['/*']
+        Quantity: 2,
+        Items: ['/index.html', '/rss.xml']
       },
       CallerReference: Date.now().toString()
     }
@@ -176,7 +219,7 @@ async function invalidateCloudFront(distributionId) {
 
   try {
     await cloudfront.createInvalidation(params).promise();
-    console.log('CloudFront cache invalidated');
+    console.log('CloudFront cache invalidated for both HTML and RSS');
   } catch (error) {
     console.error('Error invalidating CloudFront cache:', error);
   }
