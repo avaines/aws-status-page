@@ -2,7 +2,7 @@
 
 A serverless status page application built with AWS SAM that automatically monitors your AWS services and displays their health status in a beautiful, production-ready web interface.
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ![Infrastructure Diagram](docs/infrastructure-diagram.drawio)
 
@@ -12,27 +12,27 @@ A serverless status page application built with AWS SAM that automatically monit
 
 The status page uses a fully serverless architecture with the following AWS services:
 
-- **🔍 CloudWatch Alarms**: Monitor your services and trigger status updates
-- **⚡ Lambda Functions**: Process alarms, generate status pages, handle webhooks
-- **🌐 API Gateway**: REST endpoints for webhooks and RSS feeds
-- **📊 DynamoDB**: Store status history with automatic TTL expiration
-- **📦 S3**: Host static status page files (private bucket)
-- **🚀 CloudFront**: Global CDN with security headers and caching
-- **📧 SNS**: Email notifications for status changes
-- **⏰ EventBridge**: Scheduled status page updates every 5 minutes
+- **CloudWatch Alarms**: Monitor your services and trigger status updates
+- **Lambda Functions**: Process alarms, generate status pages, handle webhooks
+- **API Gateway**: REST endpoints for webhooks and RSS feeds
+- **DynamoDB**: Store status history with automatic TTL expiration
+- **S3**: Host static status page files (private bucket)
+- **CloudFront**: Global CDN with security headers and caching
+- **SNS**: Email notifications for status changes
+- **EventBridge**: Scheduled status page updates every 5 minutes
 
 ## Features
 
-- **🔄 Automatic Monitoring**: Integrates with CloudWatch alarms to automatically detect service issues
-- **🎨 Beautiful UI**: Professional status page design similar to GitHub Status, Atlassian Status Page
-- **⚡ Real-time Updates**: Automatically updates when CloudWatch alarms change state
-- **📡 RSS Feed**: Subscribe to status updates via RSS
-- **🔗 Webhook API**: Manually update service status via REST API
-- **📧 Email Notifications**: Get notified when service status changes
-- **📱 Responsive Design**: Works perfectly on desktop and mobile devices
-- **☁️ Serverless**: Built entirely on AWS serverless services for high availability and low cost
-- **🕒 TTL Data Management**: Automatic data expiration to control costs
-- **🔒 Security**: CloudFront with security headers, private S3 bucket with OAC
+- **Automatic Monitoring**: Integrates with CloudWatch alarms to automatically detect service issues
+- **Beautiful UI**: Professional status page design similar to GitHub Status, Atlassian Status Page
+- **Real-time Updates**: Automatically updates when CloudWatch alarms change state
+- **RSS Feed**: Subscribe to status updates via RSS
+- **Webhook API**: Manually update service status via REST API
+- **Email Notifications**: Get notified when service status changes
+- **Responsive Design**: Works perfectly on desktop and mobile devices
+- **Serverless**: Built entirely on AWS serverless services for high availability and low cost
+- **TTL Data Management**: Automatic data expiration to control costs
+- **Security**: CloudFront with security headers, private S3 bucket with OAC
 
 ## Quick Start
 
@@ -52,7 +52,6 @@ The status page uses a fully serverless architecture with the following AWS serv
 
 2. **Deploy using the provided script**:
    ```bash
-   chmod +x deploy.sh
    ./deploy.sh
    ```
 
@@ -164,7 +163,7 @@ Monthly Cost: <$0.01 USD
 The Lambda function automatically assigns icons based on service names and AWS namespaces:
 
 - **API Gateway** → Globe icon
-- **Lambda Functions** → Lightning icon  
+- **Lambda Functions** → Lightning icon
 - **RDS Database** → Database icon
 - **S3 Storage** → Folder icon
 - **Load Balancer** → Bar chart icon
@@ -195,7 +194,7 @@ For best service detection, use these naming patterns:
 ```bash
 # Good examples:
 "UserAPI-HighErrorRate"        → "UserAPI" service
-"PaymentService-DatabaseDown"  → "PaymentService" service  
+"PaymentService-DatabaseDown"  → "PaymentService" service
 "WebApp-LoadBalancer-5XX"      → "WebApp LoadBalancer" service
 
 # AWS services auto-detected:
@@ -297,7 +296,7 @@ sam local start-api
 ├── template.yaml              # SAM template with all AWS resources
 ├── lambda/                    # Lambda function code
 │   ├── statusGenerator.js     # Main status page generator
-│   ├── webhook.js            # Webhook API handler  
+│   ├── webhook.js            # Webhook API handler
 │   ├── rssFeed.js            # RSS feed generator
 │   ├── initialDeploy.js      # Initial deployment handler
 │   └── package.json          # Node.js dependencies

@@ -6,33 +6,33 @@ const cloudfront = new AWS.CloudFront();
 
 exports.handler = async (event, context) => {
   console.log('Initial deployment triggered:', JSON.stringify(event, null, 2));
-  
+
   try {
     const { BucketName, DistributionId } = event.ResourceProperties;
-    
+
     if (event.RequestType === 'Create' || event.RequestType === 'Update') {
       // Create initial status page
       const html = generateInitialStatusPage();
-      
+
       // Upload to S3
       await uploadToS3(BucketName, html);
-      
+
       // Invalidate CloudFront cache if distribution exists
       if (DistributionId) {
         await invalidateCloudFront(DistributionId);
       }
-      
+
       await sendResponse(event, context, 'SUCCESS', {
         Message: 'Initial status page deployed successfully'
       });
-      
+
     } else if (event.RequestType === 'Delete') {
       // Clean up if needed
       await sendResponse(event, context, 'SUCCESS', {
         Message: 'Cleanup completed'
       });
     }
-    
+
   } catch (error) {
     console.error('Error in initial deployment:', error);
     await sendResponse(event, context, 'FAILED', {
@@ -45,7 +45,7 @@ function generateInitialStatusPage() {
   const timestamp = new Date().toLocaleString();
   const serviceName = process.env.SERVICE_NAME || 'My Service';
   const serviceUrl = process.env.SERVICE_URL || 'https://example.com';
-  
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,7 +65,7 @@ function generateInitialStatusPage() {
                     </svg>
                     <h1 class="text-xl font-bold text-gray-900">${serviceName} Status</h1>
                 </div>
-                
+
                 <nav class="flex items-center space-x-6">
                     <a href="/rss" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -110,7 +110,7 @@ function generateInitialStatusPage() {
         <!-- Services Grid -->
         <div class="space-y-6">
             <h3 class="text-2xl font-bold text-gray-900">Service Status</h3>
-            
+
             <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
                 <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
@@ -157,7 +157,7 @@ async function uploadToS3(bucketName, html) {
     ContentType: 'text/html',
     CacheControl: 'max-age=300'
   };
-  
+
   await s3.putObject(params).promise();
   console.log('Initial status page uploaded to S3');
 }
@@ -173,7 +173,7 @@ async function invalidateCloudFront(distributionId) {
       CallerReference: Date.now().toString()
     }
   };
-  
+
   try {
     await cloudfront.createInvalidation(params).promise();
     console.log('CloudFront cache invalidated');

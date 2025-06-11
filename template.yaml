@@ -8,28 +8,28 @@ Parameters:
     Default: 'prod'
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name'
-  
+
   ServiceName:
     Type: String
     Default: 'MyService'
     Description: 'Name of the service being monitored'
-  
+
   ServiceUrl:
     Type: String
     Default: 'https://example.com'
     Description: 'URL of the main service'
-  
+
   NotificationEmail:
     Type: String
     Description: 'Email address for status change notifications'
     Default: 'admin@example.com'
-  
+
   EnablePointInTimeRecovery:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: 'Enable DynamoDB Point-in-Time Recovery (additional cost)'
-  
+
   DataRetentionDays:
     Type: Number
     Default: 30
@@ -43,7 +43,7 @@ Conditions:
 Globals:
   Function:
     Timeout: 30
-    Runtime: nodejs18.x
+    Runtime: nodejs22.x
     Environment:
       Variables:
         ENVIRONMENT: !Ref Environment
@@ -79,7 +79,7 @@ Resources:
         Rules:
           - Id: DeleteOldVersions
             Status: Enabled
-            NoncurrentVersionExpirationInDays: 7  # Reduced from 30 days to save costs
+            NoncurrentVersionExpirationInDays: 7
 
   # CloudFront Origin Access Control for secure S3 access
   OriginAccessControl:
@@ -118,8 +118,8 @@ Resources:
           DefaultTTL: 300
           MaxTTL: 31536000
           Compress: true
-          ResponseHeadersPolicy: !Ref SecurityHeadersPolicy
-        PriceClass: PriceClass_100  # Cheapest price class
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        PriceClass: PriceClass_100
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
         CustomErrorResponses:
@@ -133,7 +133,6 @@ Resources:
             ErrorCachingMinTTL: 300
         HttpVersion: http2
         IPV6Enabled: true
-        # Removed logging to save costs
 
   # Security Headers Policy
   SecurityHeadersPolicy:
@@ -176,7 +175,7 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: 's3:GetObject'
-            Resource: !Sub '${StatusPageBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${StatusPageBucket}/*'
             Condition:
               StringEquals:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
@@ -186,7 +185,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${AWS::StackName}-service-status'
-      BillingMode: PAY_PER_REQUEST  # Most cost-effective for low usage
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: serviceId
           AttributeType: S
@@ -205,7 +204,7 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: !If [EnablePITR, true, false]
 
-  # SNS Topic for notifications (no KMS encryption to save costs)
+  # SNS Topic for notifications
   StatusNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -244,7 +243,7 @@ Resources:
                   - s3:PutObjectAcl
                   - s3:GetObject
                   - s3:DeleteObject
-                Resource: !Sub '${StatusPageBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${StatusPageBucket}/*'
               - Effect: Allow
                 Action:
                   - cloudfront:CreateInvalidation
@@ -349,26 +348,6 @@ Resources:
             Path: /rss
             Method: get
             RestApiId: !Ref StatusPageApi
-
-  # CloudWatch Alarms for monitoring the status page itself
-  StatusPageHealthAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${AWS::StackName}-status-page-health'
-      AlarmDescription: 'Monitor status page availability via CloudFront'
-      MetricName: 4xxErrorRate
-      Namespace: AWS/CloudFront
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref CloudFrontDistribution
-      AlarmActions:
-        - !Ref StatusNotificationTopic
-        - !GetAtt StatusPageGeneratorFunction.Arn
 
   # Lambda function for initial deployment
   InitialDeployFunction:

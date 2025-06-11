@@ -56,37 +56,37 @@ const STATUS_CONFIG = {
 
 exports.handler = async (event) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
-  
+
   try {
     // Get all CloudWatch alarms that have actions pointing to our Lambda function
     const alarms = await getAllRelevantAlarms();
     console.log(`Found ${alarms.length} relevant CloudWatch alarms`);
-    
+
     // Process alarms and create service status
     const services = await processAlarmsIntoServices(alarms);
     console.log(`Processed into ${services.length} services`);
-    
+
     // Calculate overall status
     const overallStatus = calculateOverallStatus(services);
-    
+
     // Get recent incidents from DynamoDB
     const recentIncidents = await getRecentIncidents();
-    
+
     // Generate HTML page
     const html = generateStatusPage(services, overallStatus, recentIncidents);
-    
+
     // Upload to S3
     await uploadToS3(html);
-    
+
     // Invalidate CloudFront cache
     await invalidateCloudFront();
-    
+
     // Store status in DynamoDB with TTL
     await storeStatusHistory(services, overallStatus);
-    
+
     // Send notifications if status changed
     await checkAndNotifyStatusChange(overallStatus);
-    
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -97,10 +97,10 @@ exports.handler = async (event) => {
         dataRetentionDays: DATA_RETENTION_DAYS
       })
     };
-    
+
   } catch (error) {
     console.error('Error updating status page:', error);
-    
+
     return {
       statusCode: 500,
       body: JSON.stringify({
@@ -114,35 +114,35 @@ exports.handler = async (event) => {
 async function getAllRelevantAlarms() {
   const allAlarms = [];
   let nextToken = null;
-  
+
   do {
     const params = {
       MaxRecords: 100,
       ...(nextToken && { NextToken: nextToken })
     };
-    
+
     try {
       const result = await cloudwatch.describeAlarms(params).promise();
-      
+
       // Filter alarms that have our Lambda function as an action
       const relevantAlarms = result.MetricAlarms.filter(alarm => {
-        return alarm.AlarmActions && alarm.AlarmActions.some(action => 
+        return alarm.AlarmActions && alarm.AlarmActions.some(action =>
           action.includes(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
           action.includes('status-generator') ||
           // Also include alarms with SNS topics that might trigger our function
           action.includes(SNS_TOPIC_ARN)
         );
       });
-      
+
       allAlarms.push(...relevantAlarms);
       nextToken = result.NextToken;
-      
+
     } catch (error) {
       console.error('Error fetching CloudWatch alarms:', error);
       break;
     }
   } while (nextToken);
-  
+
   // If no alarms found with our function as action, get all alarms for demo purposes
   // In production, you should configure alarms to have your Lambda function as an action
   if (allAlarms.length === 0) {
@@ -155,18 +155,18 @@ async function getAllRelevantAlarms() {
       return [];
     }
   }
-  
+
   return allAlarms;
 }
 
 async function processAlarmsIntoServices(alarms) {
   const serviceMap = new Map();
-  
+
   for (const alarm of alarms) {
     const serviceName = extractServiceNameFromAlarm(alarm);
     const serviceId = serviceName.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const status = STATUS_MAPPING[alarm.StateValue] || 'degraded';
-    
+
     if (!serviceMap.has(serviceId)) {
       serviceMap.set(serviceId, {
         id: serviceId,
@@ -178,7 +178,7 @@ async function processAlarmsIntoServices(alarms) {
         worstStatus: status
       });
     }
-    
+
     const service = serviceMap.get(serviceId);
     service.alarms.push({
       name: alarm.AlarmName,
@@ -187,7 +187,7 @@ async function processAlarmsIntoServices(alarms) {
       reason: alarm.StateReason,
       timestamp: alarm.StateUpdatedTimestamp
     });
-    
+
     // Update service status to worst case among all its alarms
     const statusPriority = {
       'major_outage': 4,
@@ -196,19 +196,19 @@ async function processAlarmsIntoServices(alarms) {
       'maintenance': 1,
       'operational': 0
     };
-    
+
     if (statusPriority[status] > statusPriority[service.status]) {
       service.status = status;
     }
   }
-  
+
   return Array.from(serviceMap.values());
 }
 
 function extractServiceNameFromAlarm(alarm) {
   // Try to extract service name from alarm name using common patterns
   const alarmName = alarm.AlarmName;
-  
+
   // Pattern 1: ServiceName-MetricName (e.g., "UserAPI-HighErrorRate")
   if (alarmName.includes('-')) {
     const parts = alarmName.split('-');
@@ -216,7 +216,7 @@ function extractServiceNameFromAlarm(alarm) {
       return parts[0].replace(/([A-Z])/g, ' $1').trim();
     }
   }
-  
+
   // Pattern 2: Extract from namespace or dimensions
   if (alarm.Namespace) {
     // AWS/ApplicationELB -> Application Load Balancer
@@ -238,12 +238,12 @@ function extractServiceNameFromAlarm(alarm) {
       'AWS/SQS': 'SQS Queues',
       'AWS/SNS': 'SNS Topics'
     };
-    
+
     if (namespaceMap[alarm.Namespace]) {
       // Try to get more specific name from dimensions
       if (alarm.Dimensions && alarm.Dimensions.length > 0) {
         const dimension = alarm.Dimensions[0];
-        if (dimension.Name === 'FunctionName' || dimension.Name === 'LoadBalancer' || 
+        if (dimension.Name === 'FunctionName' || dimension.Name === 'LoadBalancer' ||
             dimension.Name === 'DBInstanceIdentifier' || dimension.Name === 'TableName') {
           return `${namespaceMap[alarm.Namespace]} (${dimension.Value})`;
         }
@@ -251,7 +251,7 @@ function extractServiceNameFromAlarm(alarm) {
       return namespaceMap[alarm.Namespace];
     }
   }
-  
+
   // Pattern 3: Use alarm name as-is but clean it up
   return alarmName
     .replace(/([A-Z])/g, ' $1')
@@ -264,11 +264,11 @@ function generateServiceDescription(alarm) {
   if (alarm.AlarmDescription) {
     return alarm.AlarmDescription;
   }
-  
+
   // Generate description based on metric and namespace
   const metric = alarm.MetricName;
   const namespace = alarm.Namespace;
-  
+
   if (namespace === 'AWS/Lambda' && metric === 'Errors') {
     return 'Monitoring Lambda function error rates';
   } else if (namespace === 'AWS/ApplicationELB' && metric === 'HTTPCode_Target_5XX_Count') {
@@ -278,7 +278,7 @@ function generateServiceDescription(alarm) {
   } else if (namespace === 'AWS/ApiGateway' && metric === '5XXError') {
     return 'Monitoring API Gateway error rates';
   }
-  
+
   return `Monitoring ${metric} for ${namespace.replace('AWS/', '')}`;
 }
 
@@ -289,13 +289,13 @@ function calculateOverallStatus(services) {
       message: 'No services are currently being monitored'
     };
   }
-  
+
   const statuses = services.map(s => s.status);
   const statusCounts = statuses.reduce((acc, status) => {
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
-  
+
   if (statuses.includes('major_outage')) {
     const count = statusCounts.major_outage;
     return {
@@ -335,7 +335,7 @@ async function getRecentIncidents() {
       ScanIndexForward: false,
       Limit: 10
     };
-    
+
     const result = await dynamodb.scan(params).promise();
     return (result.Items || []).sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
@@ -346,7 +346,7 @@ async function getRecentIncidents() {
 
 function generateStatusPage(services, overallStatus, recentIncidents) {
   const timestamp = new Date().toLocaleString();
-  
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -368,7 +368,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                     </svg>
                     <h1 class="text-xl font-bold text-gray-900">${SERVICE_NAME} Status</h1>
                 </div>
-                
+
                 <nav class="flex items-center space-x-6">
                     <a href="/rss" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -418,7 +418,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                     Data retained for ${DATA_RETENTION_DAYS} days
                 </p>
             </div>
-            
+
             ${services.length > 0 ? `
             <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 ${services.map(service => `
@@ -434,7 +434,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center space-x-2">
                                 <div class="w-4 h-4 ${STATUS_CONFIG[service.status].color}">
@@ -448,7 +448,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                                 Updated ${service.lastUpdated}
                             </span>
                         </div>
-                        
+
                         <!-- Alarm Details -->
                         <div class="text-xs text-gray-500">
                             <details class="cursor-pointer">
@@ -479,7 +479,7 @@ function generateStatusPage(services, overallStatus, recentIncidents) {
                 </svg>
                 <h4 class="text-lg font-semibold text-gray-900 mb-2">No Services Detected</h4>
                 <p class="text-gray-600 mb-4">
-                    No CloudWatch alarms are currently configured to trigger this status page. 
+                    No CloudWatch alarms are currently configured to trigger this status page.
                     Configure your alarms to include this Lambda function as an action to start monitoring services.
                 </p>
                 <div class="text-sm text-gray-500">
@@ -556,7 +556,7 @@ async function uploadToS3(html) {
     ContentType: 'text/html',
     CacheControl: 'max-age=300'
   };
-  
+
   await s3.putObject(params).promise();
   console.log('Status page uploaded to S3');
 }
@@ -566,7 +566,7 @@ async function invalidateCloudFront() {
     console.log('No CloudFront distribution ID provided, skipping invalidation');
     return;
   }
-  
+
   const params = {
     DistributionId: CLOUDFRONT_DISTRIBUTION_ID,
     InvalidationBatch: {
@@ -577,7 +577,7 @@ async function invalidateCloudFront() {
       CallerReference: Date.now().toString()
     }
   };
-  
+
   try {
     await cloudfront.createInvalidation(params).promise();
     console.log('CloudFront cache invalidated');
@@ -589,7 +589,7 @@ async function invalidateCloudFront() {
 async function storeStatusHistory(services, overallStatus) {
   const timestamp = Date.now();
   const ttlTimestamp = Math.floor(timestamp / 1000) + (DATA_RETENTION_DAYS * 24 * 60 * 60);
-  
+
   const params = {
     TableName: STATUS_TABLE,
     Item: {
@@ -602,7 +602,7 @@ async function storeStatusHistory(services, overallStatus) {
       dataRetentionDays: DATA_RETENTION_DAYS
     }
   };
-  
+
   try {
     await dynamodb.put(params).promise();
     console.log(`Status history stored in DynamoDB with TTL: ${new Date(ttlTimestamp * 1000).toISOString()}`);
@@ -622,12 +622,12 @@ async function checkAndNotifyStatusChange(currentStatus) {
       ScanIndexForward: false,
       Limit: 2
     };
-    
+
     const result = await dynamodb.query(params).promise();
-    
+
     if (result.Items && result.Items.length >= 2) {
       const lastStatus = result.Items[1].status;
-      
+
       if (lastStatus !== currentStatus.status) {
         await sendStatusChangeNotification(lastStatus, currentStatus);
       }
@@ -655,7 +655,7 @@ View status page: https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUT
     Subject: `${SERVICE_NAME} - Status Changed to ${STATUS_CONFIG[newStatus.status]?.label || newStatus.status}`,
     Message: message
   };
-  
+
   try {
     await sns.publish(params).promise();
     console.log('Status change notification sent');
@@ -666,18 +666,18 @@ View status page: https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUT
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return 'Unknown';
-  
+
   const now = new Date();
   const then = new Date(timestamp);
   const diffMs = now - then;
   const diffMins = Math.floor(diffMs / 60000);
-  
+
   if (diffMins < 1) return 'Just now';
   if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
-  
+
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-  
+
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }

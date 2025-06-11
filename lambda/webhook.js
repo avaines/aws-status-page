@@ -8,10 +8,10 @@ const DATA_RETENTION_DAYS = parseInt(process.env.DATA_RETENTION_DAYS) || 30;
 
 exports.handler = async (event) => {
   console.log('Webhook event received:', JSON.stringify(event, null, 2));
-  
+
   try {
     const body = JSON.parse(event.body || '{}');
-    
+
     // Validate webhook payload
     if (!body.serviceId || !body.status) {
       return {
@@ -25,11 +25,11 @@ exports.handler = async (event) => {
         })
       };
     }
-    
+
     // Store the status update with TTL
     const timestamp = Date.now();
     const ttlTimestamp = Math.floor(timestamp / 1000) + (DATA_RETENTION_DAYS * 24 * 60 * 60);
-    
+
     const params = {
       TableName: STATUS_TABLE,
       Item: {
@@ -43,10 +43,10 @@ exports.handler = async (event) => {
         source: 'webhook'
       }
     };
-    
+
     await dynamodb.put(params).promise();
     console.log(`Status update stored with TTL: ${new Date(ttlTimestamp * 1000).toISOString()}`);
-    
+
     // Trigger status page regeneration
     const lambdaParams = {
       FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME.replace('-webhook', '-status-generator'),
@@ -57,9 +57,9 @@ exports.handler = async (event) => {
         status: body.status
       })
     };
-    
+
     await lambda.invoke(lambdaParams).promise();
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -75,10 +75,10 @@ exports.handler = async (event) => {
         dataRetentionDays: DATA_RETENTION_DAYS
       })
     };
-    
+
   } catch (error) {
     console.error('Error processing webhook:', error);
-    
+
     return {
       statusCode: 500,
       headers: {
