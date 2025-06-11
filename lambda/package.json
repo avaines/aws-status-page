@@ -1,12 +1,24 @@
 {
-  "name": "status-page-lambda",
+  "name": "aws-status-page-lambda",
   "version": "1.0.0",
-  "description": "Lambda functions for AWS Status Page",
-  "main": "statusGenerator.js",
+  "description": "Lambda function for AWS Status Page - generates status pages and RSS feeds",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
     "aws-sdk": "^2.1691.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "status-page",
+    "cloudwatch",
+    "monitoring"
+  ],
+  "author": "AWS Status Page",
+  "license": "MIT"
 }
