@@ -1,0 +1,448 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'AWS Service Status Page - Serverless application for monitoring and displaying service health'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name'
+  
+  ServiceName:
+    Type: String
+    Default: 'MyService'
+    Description: 'Name of the service being monitored'
+  
+  ServiceUrl:
+    Type: String
+    Default: 'https://example.com'
+    Description: 'URL of the main service'
+  
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for status change notifications'
+    Default: 'admin@example.com'
+  
+  EnablePointInTimeRecovery:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable DynamoDB Point-in-Time Recovery (additional cost)'
+  
+  DataRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+    Description: 'Number of days to retain status history data (1-365 days)'
+
+Conditions:
+  EnablePITR: !Equals [!Ref EnablePointInTimeRecovery, 'true']
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        SERVICE_NAME: !Ref ServiceName
+        SERVICE_URL: !Ref ServiceUrl
+        STATUS_BUCKET: !Ref StatusPageBucket
+        CLOUDFRONT_DISTRIBUTION_ID: !Ref CloudFrontDistribution
+        DATA_RETENTION_DAYS: !Ref DataRetentionDays
+
+Resources:
+  # S3 Bucket for hosting the status page (private, accessed only via CloudFront)
+  StatusPageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-status-page-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 7  # Reduced from 30 days to save costs
+
+  # CloudFront Origin Access Control for secure S3 access
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-OAC'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt StatusPageBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !Ref OriginAccessControl
+        Enabled: true
+        DefaultRootObject: index.html
+        Comment: !Sub 'Status Page Distribution for ${ServiceName}'
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          TargetOriginId: S3Origin
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+          MinTTL: 0
+          DefaultTTL: 300
+          MaxTTL: 31536000
+          Compress: true
+          ResponseHeadersPolicy: !Ref SecurityHeadersPolicy
+        PriceClass: PriceClass_100  # Cheapest price class
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+        HttpVersion: http2
+        IPV6Enabled: true
+        # Removed logging to save costs
+
+  # Security Headers Policy
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-security-headers'
+        Comment: 'Security headers for status page'
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: false
+          ContentTypeOptions:
+            Override: false
+          FrameOptions:
+            FrameOption: DENY
+            Override: false
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: false
+        CustomHeadersConfig:
+          Items:
+            - Header: 'X-Robots-Tag'
+              Value: 'index, follow'
+              Override: false
+            - Header: 'Cache-Control'
+              Value: 'public, max-age=300'
+              Override: false
+
+  # S3 Bucket Policy for CloudFront OAC access only
+  StatusPageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StatusPageBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: 's3:GetObject'
+            Resource: !Sub '${StatusPageBucket}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+  # DynamoDB Table for storing service status with TTL
+  ServiceStatusTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-service-status'
+      BillingMode: PAY_PER_REQUEST  # Most cost-effective for low usage
+      AttributeDefinitions:
+        - AttributeName: serviceId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: serviceId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [EnablePITR, true, false]
+
+  # SNS Topic for notifications (no KMS encryption to save costs)
+  StatusNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-status-notifications'
+      DisplayName: !Sub '${ServiceName} Status Notifications'
+
+  # SNS Subscription
+  StatusNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref StatusNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
+  # Lambda Execution Role
+  StatusPageLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StatusPagePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub '${StatusPageBucket}/*'
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                  - cloudfront:ListInvalidations
+                Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ServiceStatusTable.Arn
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref StatusNotificationTopic
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*'
+
+  # Lambda function for generating status page
+  StatusPageGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-status-generator'
+      CodeUri: lambda/
+      Handler: statusGenerator.handler
+      Role: !GetAtt StatusPageLambdaRole.Arn
+      Environment:
+        Variables:
+          STATUS_TABLE: !Ref ServiceStatusTable
+          SNS_TOPIC_ARN: !Ref StatusNotificationTopic
+      Events:
+        CloudWatchAlarmTrigger:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              source: ['aws.cloudwatch']
+              detail-type: ['CloudWatch Alarm State Change']
+        ScheduledUpdate:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Description: 'Update status page every 5 minutes'
+      # Removed DLQ to save costs
+
+  # Lambda function for handling webhook updates
+  StatusWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-status-webhook'
+      CodeUri: lambda/
+      Handler: webhook.handler
+      Role: !GetAtt StatusPageLambdaRole.Arn
+      Environment:
+        Variables:
+          STATUS_TABLE: !Ref ServiceStatusTable
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: post
+            RestApiId: !Ref StatusPageApi
+
+  # API Gateway for webhook endpoints (minimal configuration)
+  StatusPageApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-status-api'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      # Removed access logging to save costs
+
+  # RSS Feed Lambda Function
+  RSSFeedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-rss-feed'
+      CodeUri: lambda/
+      Handler: rssFeed.handler
+      Role: !GetAtt StatusPageLambdaRole.Arn
+      Environment:
+        Variables:
+          STATUS_TABLE: !Ref ServiceStatusTable
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            Path: /rss
+            Method: get
+            RestApiId: !Ref StatusPageApi
+
+  # CloudWatch Alarms for monitoring the status page itself
+  StatusPageHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-status-page-health'
+      AlarmDescription: 'Monitor status page availability via CloudFront'
+      MetricName: 4xxErrorRate
+      Namespace: AWS/CloudFront
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      AlarmActions:
+        - !Ref StatusNotificationTopic
+        - !GetAtt StatusPageGeneratorFunction.Arn
+
+  # Lambda function for initial deployment
+  InitialDeployFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-initial-deploy'
+      CodeUri: lambda/
+      Handler: initialDeploy.handler
+      Role: !GetAtt StatusPageLambdaRole.Arn
+      Timeout: 300
+
+  # Custom Resource to trigger initial deployment
+  InitialDeployment:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt InitialDeployFunction.Arn
+      StackName: !Ref AWS::StackName
+      BucketName: !Ref StatusPageBucket
+      DistributionId: !Ref CloudFrontDistribution
+    DependsOn:
+      - StatusPageBucketPolicy
+      - CloudFrontDistribution
+
+Outputs:
+  StatusPageUrl:
+    Description: 'URL of the status page (via CloudFront)'
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-StatusPageUrl'
+
+  StatusPageBucket:
+    Description: 'S3 Bucket hosting the status page'
+    Value: !Ref StatusPageBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-StatusPageBucket'
+
+  CloudFrontDistributionId:
+    Description: 'CloudFront Distribution ID'
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDistributionId'
+
+  CloudFrontDomainName:
+    Description: 'CloudFront Distribution Domain Name'
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
+
+  ApiGatewayUrl:
+    Description: 'API Gateway URL for webhooks'
+    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+
+  RSSFeedUrl:
+    Description: 'RSS Feed URL'
+    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/rss'
+    Export:
+      Name: !Sub '${AWS::StackName}-RSSFeedUrl'
+
+  DynamoDBTable:
+    Description: 'DynamoDB table for service status'
+    Value: !Ref ServiceStatusTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceStatusTable'
+
+  SNSTopicArn:
+    Description: 'SNS Topic ARN for notifications'
+    Value: !Ref StatusNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+
+  DataRetentionDays:
+    Description: 'Number of days data is retained in DynamoDB'
+    Value: !Ref DataRetentionDays
+    Export:
+      Name: !Sub '${AWS::StackName}-DataRetentionDays'

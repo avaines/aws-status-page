@@ -1,0 +1,12 @@
+{
+  "name": "status-page-lambda",
+  "version": "1.0.0",
+  "description": "Lambda functions for AWS Status Page",
+  "main": "statusGenerator.js",
+  "dependencies": {
+    "aws-sdk": "^2.1691.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
