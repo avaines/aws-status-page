@@ -58,6 +58,11 @@ exports.handler = async (event) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
 
   try {
+    // Handle CloudFormation custom resource events
+    if (event.RequestType) {
+      return await handleCustomResource(event);
+    }
+
     // Get all CloudWatch alarms that have actions pointing to our Lambda function
     const alarms = await getAllRelevantAlarms();
     console.log(`Found ${alarms.length} relevant CloudWatch alarms`);
@@ -116,6 +121,221 @@ exports.handler = async (event) => {
     };
   }
 };
+
+async function handleCustomResource(event) {
+  console.log('Handling CloudFormation custom resource event');
+  
+  if (event.RequestType === 'Create' || event.RequestType === 'Update') {
+    // Create initial status page and RSS feed
+    const html = generateInitialStatusPage();
+    const rssXml = generateInitialRSSFeed();
+
+    // Upload both HTML and RSS to S3
+    await Promise.all([
+      uploadToS3('index.html', html, 'text/html'),
+      uploadToS3('rss.xml', rssXml, 'application/rss+xml')
+    ]);
+
+    // Invalidate CloudFront cache if distribution exists
+    if (CLOUDFRONT_DISTRIBUTION_ID) {
+      await invalidateCloudFront();
+    }
+
+    await sendCustomResourceResponse(event, 'SUCCESS', {
+      Message: 'Initial status page and RSS feed deployed successfully'
+    });
+  } else if (event.RequestType === 'Delete') {
+    // Clean up if needed
+    await sendCustomResourceResponse(event, 'SUCCESS', {
+      Message: 'Cleanup completed'
+    });
+  }
+
+  return { statusCode: 200 };
+}
+
+function generateInitialStatusPage() {
+  const timestamp = new Date().toLocaleString();
+  const rssUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}/rss.xml`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${SERVICE_NAME} - Service Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="alternate" type="application/rss+xml" title="${SERVICE_NAME} Status Updates" href="${rssUrl}">
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <h1 class="text-xl font-bold text-gray-900">${SERVICE_NAME} Status</h1>
+                </div>
+
+                <nav class="flex items-center space-x-6">
+                    <a href="${rssUrl}" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"/>
+                        </svg>
+                        <span class="text-sm font-medium">RSS Feed</span>
+                    </a>
+                    <a href="/help" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="text-sm font-medium">Help</span>
+                    </a>
+                    <a href="${SERVICE_URL}" class="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors duration-200">
+                        <span class="text-sm font-medium">Visit Service</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Overall Status -->
+        <div class="rounded-lg border border-green-200 bg-green-50 p-6 mb-8">
+            <div class="flex items-center space-x-3">
+                <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h2 class="text-lg font-semibold text-green-600">
+                        All Systems Operational
+                    </h2>
+                    <p class="text-gray-700 mt-1">Status page has been successfully deployed and is ready to monitor your services.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Grid -->
+        <div class="space-y-6">
+            <h3 class="text-2xl font-bold text-gray-900">Service Status</h3>
+
+            <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Waiting for Service Data</h4>
+                <p class="text-gray-600 mb-4">
+                    Your status page is ready! Services will appear here automatically when CloudWatch alarms are detected.
+                </p>
+                <div class="text-sm text-gray-500">
+                    <p class="font-medium mb-2">To start monitoring your services:</p>
+                    <ol class="list-decimal list-inside space-y-1 text-left max-w-md mx-auto">
+                        <li>Create CloudWatch alarms for your AWS services</li>
+                        <li>Add this Lambda function ARN as an alarm action:
+                            <code class="block bg-gray-100 px-2 py-1 rounded mt-1 text-xs break-all">
+                                ${process.env.AWS_LAMBDA_FUNCTION_NAME ? `arn:aws:lambda:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID || 'YOUR_ACCOUNT'}:function:${process.env.AWS_LAMBDA_FUNCTION_NAME}` : 'Function ARN will appear here after deployment'}
+                            </code>
+                        </li>
+                        <li>Services will automatically appear on the next alarm state change</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-16">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-600">
+                    Last updated: ${timestamp} | Data retained for ${DATA_RETENTION_DAYS} days
+                </p>
+                <div class="flex items-center space-x-4">
+                    <a href="/privacy" class="text-sm text-gray-600 hover:text-gray-900">
+                        Privacy Policy
+                    </a>
+                    <a href="/terms" class="text-sm text-gray-600 hover:text-gray-900">
+                        Terms of Service
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>`;
+}
+
+function generateInitialRSSFeed() {
+  const now = new Date().toUTCString();
+  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}`;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(SERVICE_NAME)} - Status Updates</title>
+    <description>Real-time status updates for ${escapeXml(SERVICE_NAME)}</description>
+    <link>${statusPageUrl}</link>
+    <lastBuildDate>${now}</lastBuildDate>
+    <language>en-us</language>
+    <generator>AWS Lambda Status Page</generator>
+    <ttl>5</ttl>
+    
+    <item>
+      <title>Status Page Deployed</title>
+      <description>Your AWS status page has been successfully deployed and is ready to monitor your services. Configure CloudWatch alarms to start monitoring.</description>
+      <pubDate>${now}</pubDate>
+      <link>${statusPageUrl}</link>
+      <guid isPermaLink="false">initial-deployment-${Date.now()}</guid>
+    </item>
+  </channel>
+</rss>`;
+}
+
+async function sendCustomResourceResponse(event, responseStatus, responseData) {
+  const https = require('https');
+  
+  const responseBody = JSON.stringify({
+    Status: responseStatus,
+    Reason: `See the details in CloudWatch Log Stream`,
+    PhysicalResourceId: `status-page-${Date.now()}`,
+    StackId: event.StackId,
+    RequestId: event.RequestId,
+    LogicalResourceId: event.LogicalResourceId,
+    Data: responseData
+  });
+
+  const parsedUrl = new URL(event.ResponseURL);
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: 'PUT',
+    headers: {
+      'content-type': '',
+      'content-length': responseBody.length
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(options, (response) => {
+      console.log(`Status code: ${response.statusCode}`);
+      resolve();
+    });
+
+    request.on('error', (error) => {
+      console.log(`sendResponse Error: ${error}`);
+      reject(error);
+    });
+
+    request.write(responseBody);
+    request.end();
+  });
+}
 
 async function getAllRelevantAlarms() {
   const allAlarms = [];

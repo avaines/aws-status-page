@@ -268,12 +268,8 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref StatusNotificationTopic
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*'
 
-  # Lambda function for generating status page
+  # Lambda function for generating status page and RSS feed
   StatusPageGeneratorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -298,54 +294,12 @@ Resources:
             Schedule: rate(5 minutes)
             Description: 'Update status page every 5 minutes'
 
-  # Lambda function for handling webhook updates
-  StatusWebhookFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-status-webhook'
-      CodeUri: lambda/
-      Handler: webhook.handler
-      Role: !GetAtt StatusPageLambdaRole.Arn
-      Environment:
-        Variables:
-          STATUS_TABLE: !Ref ServiceStatusTable
-      Events:
-        ApiGateway:
-          Type: Api
-          Properties:
-            Path: /webhook
-            Method: post
-            RestApiId: !Ref StatusPageApi
-
-  # API Gateway for webhook endpoints only (minimal configuration)
-  StatusPageApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub '${AWS::StackName}-status-api'
-      StageName: !Ref Environment
-      Cors:
-        AllowMethods: "'POST,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
-
-  # Lambda function for initial deployment
-  InitialDeployFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-initial-deploy'
-      CodeUri: lambda/
-      Handler: initialDeploy.handler
-      Role: !GetAtt StatusPageLambdaRole.Arn
-      Timeout: 300
-
-  # Custom Resource to trigger initial deployment
-  InitialDeployment:
+  # Custom Resource to create initial status page
+  InitialStatusPageCreation:
     Type: AWS::CloudFormation::CustomResource
     Properties:
-      ServiceToken: !GetAtt InitialDeployFunction.Arn
-      StackName: !Ref AWS::StackName
-      BucketName: !Ref StatusPageBucket
-      DistributionId: !Ref CloudFrontDistribution
+      ServiceToken: !GetAtt StatusPageGeneratorFunction.Arn
+      TriggerUpdate: !Ref 'AWS::StackId'
     DependsOn:
       - StatusPageBucketPolicy
       - CloudFrontDistribution
@@ -381,18 +335,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
 
-  ApiGatewayUrl:
-    Description: 'API Gateway URL for webhooks'
-    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
-    Export:
-      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
-
-  WebhookUrl:
-    Description: 'Webhook endpoint URL'
-    Value: !Sub 'https://${StatusPageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/webhook'
-    Export:
-      Name: !Sub '${AWS::StackName}-WebhookUrl'
-
   DynamoDBTable:
     Description: 'DynamoDB table for service status'
     Value: !Ref ServiceStatusTable
@@ -410,3 +352,9 @@ Outputs:
     Value: !Ref DataRetentionDays
     Export:
       Name: !Sub '${AWS::StackName}-DataRetentionDays'
+
+  StatusGeneratorFunctionArn:
+    Description: 'ARN of the status generator Lambda function (use this in CloudWatch alarm actions)'
+    Value: !GetAtt StatusPageGeneratorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StatusGeneratorFunctionArn'

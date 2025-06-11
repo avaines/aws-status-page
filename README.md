@@ -13,8 +13,7 @@ A serverless status page application built with AWS SAM that automatically monit
 The status page uses a fully serverless architecture with the following AWS services:
 
 - **CloudWatch Alarms**: Monitor your services and trigger status updates
-- **Lambda Functions**: Process alarms, generate status pages, handle webhooks
-- **API Gateway**: REST endpoint for webhooks only
+- **Lambda Function**: Process alarms, generate status pages and RSS feeds
 - **DynamoDB**: Store status history with automatic TTL expiration
 - **S3**: Host static status page files and RSS feed (private bucket)
 - **CloudFront**: Global CDN with security headers and caching
@@ -27,12 +26,12 @@ The status page uses a fully serverless architecture with the following AWS serv
 - **Beautiful UI**: Professional status page design similar to GitHub Status, Atlassian Status Page
 - **Real-time Updates**: Automatically updates when CloudWatch alarms change state
 - **RSS Feed**: Subscribe to status updates via RSS (hosted on S3/CloudFront)
-- **Webhook API**: Manually update service status via REST API
 - **Email Notifications**: Get notified when service status changes
 - **Responsive Design**: Works perfectly on desktop and mobile devices
 - **Serverless**: Built entirely on AWS serverless services for high availability and low cost
 - **TTL Data Management**: Automatic data expiration to control costs
 - **Security**: CloudFront with security headers, private S3 bucket with OAC
+- **Minimal Infrastructure**: Single Lambda function handles everything
 
 ## Quick Start
 
@@ -94,21 +93,6 @@ Services are automatically detected from CloudWatch alarms using these patterns:
 // Pattern 1: Alarm name prefix (e.g., "UserAPI-HighErrorRate" → "UserAPI")
 // Pattern 2: AWS namespace mapping (e.g., "AWS/Lambda" → "Lambda Functions")
 // Pattern 3: Dimension values (e.g., FunctionName: "user-api" → "Lambda Functions (user-api)")
-```
-
-### Manual Status Updates
-
-You can manually update service status using the webhook API:
-
-```bash
-curl -X POST https://your-api-gateway-url/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "serviceId": "api-gateway",
-    "status": "degraded",
-    "message": "Experiencing slower response times",
-    "description": "We are investigating performance issues"
-  }'
 ```
 
 ### Status Values
@@ -232,7 +216,6 @@ Lambda Executions: ~8,640/month    → $0.00
 DynamoDB Requests: ~17,280/month    → $0.02
 S3 Storage: ~1MB                    → $0.00
 CloudFront: ~1,000 requests         → $0.00
-API Gateway: ~100 requests          → $0.00
 SNS: ~10 notifications              → $0.00
 CloudWatch: 1 alarm                 → $0.10
 Total: ~$0.12/month
@@ -247,15 +230,14 @@ Total: ~$0.12/month
 - **🚫 No KMS**: SNS uses default encryption to avoid KMS costs
 - **🚫 No PITR**: DynamoDB Point-in-Time Recovery disabled by default
 - **🚫 No Logging**: CloudFront access logging disabled to save costs
-- **📡 Simplified API**: Only webhook endpoint, RSS served from S3
+- **📡 Minimal Infrastructure**: Single Lambda function, no API Gateway for RSS
 
 ## Troubleshooting
 
 ### Status page not updating
 1. Check CloudWatch logs for the Lambda function
 2. Verify CloudWatch alarms have the Lambda function as an action
-3. Test the webhook API manually
-4. Check EventBridge scheduled rule is enabled
+3. Check EventBridge scheduled rule is enabled
 
 ### No services detected
 1. Ensure CloudWatch alarms exist and have the Lambda function ARN as an action
@@ -293,8 +275,8 @@ npm install
 # Test Lambda functions locally
 sam local invoke StatusPageGeneratorFunction --event events/cloudwatch-alarm.json
 
-# Start local API Gateway (webhook only)
-sam local start-api
+# Start local development (status page only)
+npm run dev
 ```
 
 ### Project Structure
@@ -303,8 +285,6 @@ sam local start-api
 ├── template.yaml              # SAM template with all AWS resources
 ├── lambda/                    # Lambda function code
 │   ├── statusGenerator.js     # Main status page and RSS generator
-│   ├── webhook.js            # Webhook API handler
-│   ├── initialDeploy.js      # Initial deployment handler
 │   └── package.json          # Node.js dependencies
 ├── docs/
 │   └── infrastructure-diagram.drawio  # Architecture diagram
@@ -352,4 +332,4 @@ For issues and questions:
 
 Built with ❤️ using AWS SAM and serverless technologies.
 
-**Key Features**: Automatic service discovery • TTL data management • Cost-optimized • Production-ready • Fully serverless • Integrated RSS feed
+**Key Features**: Automatic service discovery • TTL data management • Cost-optimized • Production-ready • Fully serverless • Integrated RSS feed • Minimal infrastructure

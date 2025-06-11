@@ -80,10 +80,10 @@ RSS_FEED_URL=$(aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[?OutputKey==`RSSFeedUrl`].OutputValue' \
     --output text)
 
-WEBHOOK_URL=$(aws cloudformation describe-stacks \
+LAMBDA_FUNCTION_ARN=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
-    --query 'Stacks[0].Outputs[?OutputKey==`WebhookUrl`].OutputValue' \
+    --query 'Stacks[0].Outputs[?OutputKey==`StatusGeneratorFunctionArn`].OutputValue' \
     --output text)
 
 echo ""
@@ -93,12 +93,19 @@ echo ""
 echo -e "${GREEN}RSS Feed URL:${NC}"
 echo "   $RSS_FEED_URL"
 echo ""
-echo -e "${GREEN}Webhook API URL:${NC}"
-echo "   $WEBHOOK_URL"
+echo -e "${GREEN}Lambda Function ARN (use this in CloudWatch alarm actions):${NC}"
+echo "   $LAMBDA_FUNCTION_ARN"
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 echo "1. Visit your status page to verify it's working"
-echo "2. Configure CloudWatch alarms to trigger automatic updates"
-echo "3. Use the webhook API to manually update service status"
-echo "4. Subscribe to the RSS feed for status notifications"
+echo "2. Configure CloudWatch alarms to trigger automatic updates:"
+echo "   - Add the Lambda Function ARN above as an alarm action"
+echo "   - Use descriptive alarm names for better service detection"
+echo "3. Subscribe to the RSS feed for status notifications"
+echo "4. The status page will automatically update every 5 minutes"
+echo ""
+echo -e "${YELLOW}Example CloudWatch alarm configuration:${NC}"
+echo "aws cloudwatch put-metric-alarm \\"
+echo "  --alarm-name \"MyApp-HighErrorRate\" \\"
+echo "  --alarm-actions \"$LAMBDA_FUNCTION_ARN\""
 echo ""
