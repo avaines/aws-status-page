@@ -4,10 +4,17 @@
   "description": "Lambda function for AWS Status Page - generates status pages and RSS feeds",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false"
   },
   "dependencies": {
     "aws-sdk": "^2.1691.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.8"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -20,5 +27,24 @@
     "monitoring"
   ],
   "author": "AWS Status Page",
-  "license": "MIT"
+  "license": "MIT",
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/__tests__/setup.js"
+    ]
+  }
 }
