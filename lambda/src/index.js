@@ -23,6 +23,7 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'My Service';
 const SERVICE_URL = process.env.SERVICE_URL || 'https://example.com';
 const DATA_RETENTION_DAYS = parseInt(process.env.DATA_RETENTION_DAYS) || 30;
 
+
 exports.handler = async (event, context) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
 
