@@ -39,7 +39,7 @@ Message: ${newStatus.message}
 Time: ${new Date().toISOString()}
 Data Retention: ${dataRetentionDays} days
 
-View status page: https://${cloudFrontDistributionId ? `${cloudFrontDistributionId}.cloudfront.net` : 'your-status-page.com'}`;
+View status page: https://${cloudFrontDistributionId ? `${cloudFrontDistributionId}.cloudfront.net` : 'example-status-page.com'}`;
 
   const command = new PublishCommand({
     TopicArn: snsTopicArn,

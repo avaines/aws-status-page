@@ -90,12 +90,12 @@ exports.handler = async (event, context) => {
 
     // Send notifications if status changed
     await snsNotifier.checkAndNotifyStatusChange(
-      dynamoDbDocClient, 
-      snsClient, 
-      STATUS_TABLE, 
-      SNS_TOPIC_ARN, 
-      overallStatus, 
-      SERVICE_NAME, 
+      dynamoDbDocClient,
+      snsClient,
+      STATUS_TABLE,
+      SNS_TOPIC_ARN,
+      overallStatus,
+      SERVICE_NAME,
       DATA_RETENTION_DAYS,
       CLOUDFRONT_DISTRIBUTION_ID
     );

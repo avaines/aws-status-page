@@ -1,15 +1,80 @@
 #!/bin/bash
 
 # AWS Status Page Deployment Script
-# This script deploys the status page using AWS SAM
+#
+# This script deploys an AWS-based status page using AWS SAM.
+# It performs the following operations:
+#   1. Checks if AWS CLI and SAM CLI are installed.
+#   2. Verifies that AWS credentials are configured.
+#   3. Builds the SAM application from the SAM template.
+#   4. Deploys the CloudFormation stack with the specified parameters.
+#   5. Retrieves and displays output information including the status page URL,
+#      RSS feed URL, and Lambda function ARN.
+#
+# Usage:
+#   ./deploy.sh [--stack-name <name>] [--service-name <name>] [--service-url <url>]
+#               [--notification-email <email>] [--region <region>] [--environment <env>]
+#
+# If no arguments are provided, the following default values are used:
+#   STACK_NAME         = "aws-status-page"
+#   SERVICE_NAME       = "MyService"
+#   SERVICE_URL        = "https://example.com"
+#   NOTIFICATION_EMAIL = "admin@example.com"
+#   REGION             = "us-east-1"
+#   ENVIRONMENT        = "dev"
 
 set -e
 
 # Default Values
 STACK_NAME="aws-status-page"
 SERVICE_NAME="MyService"
+SERVICE_URL="https://example.com"
+NOTIFICATION_EMAIL="admin@example.com"
 REGION="us-east-1"
 ENVIRONMENT="dev"
+CI="false"  # New default for CI mode
+
+# Parse command line arguments to override default values
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --stack-name)
+            STACK_NAME="$2"
+            shift 2
+            ;;
+        --service-name)
+            SERVICE_NAME="$2"
+            shift 2
+            ;;
+        --service-url)
+            SERVICE_URL="$2"
+            shift 2
+            ;;
+        --notification-email)
+            NOTIFICATION_EMAIL="$2"
+            shift 2
+            ;;
+        --region)
+            REGION="$2"
+            shift 2
+            ;;
+        --environment)
+            ENVIRONMENT="$2"
+            shift 2
+            ;;
+        --ci)
+            CI="true"
+            shift 1
+            ;;
+        --help)
+            echo "Usage: $0 [--stack-name <name>] [--service-name <name>] [--service-url <url>] [--notification-email <email>] [--region <region>] [--environment <env>]"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -41,20 +106,40 @@ if ! aws sts get-caller-identity &> /dev/null; then
 fi
 
 echo -e "${YELLOW}Building SAM application...${NC}"
-sam build
+sam build --template-file ./infra/sam-template.yaml
 
-echo -e "${YELLOW}Deploying to AWS...${NC}"
-sam deploy \
-    --stack-name "$STACK_NAME" \
-    --region "$REGION" \
-    --capabilities CAPABILITY_IAM \
-    --resolve-s3 \
-    --parameter-overrides \
-        Environment="$ENVIRONMENT" \
-        ServiceName="$SERVICE_NAME" \
-        ServiceUrl="https://example.com" \
-        NotificationEmail="admin@example.com" \
-    --confirm-changeset
+if [ "$CI" = "true" ]; then
+    # In CI mode: Skip confirmation
+    sam deploy \
+        --template-file ./infra/sam-template.yaml \
+        --stack-name "$STACK_NAME" \
+        --region "$REGION" \
+        --capabilities CAPABILITY_IAM \
+        --resolve-s3 \
+        --force-upload \
+        --parameter-overrides \
+            Environment="$ENVIRONMENT" \
+            ServiceName="$SERVICE_NAME" \
+            ServiceUrl="${SERVICE_URL}" \
+            NotificationEmail="${NOTIFICATION_EMAIL}" \
+        --no-fail-on-empty-changeset
+else
+    # Normal mode: Prompt for confirmation
+    sam deploy \
+        --template-file ./infra/sam-template.yaml \
+        --stack-name "$STACK_NAME" \
+        --region "$REGION" \
+        --capabilities CAPABILITY_IAM \
+        --resolve-s3 \
+        --force-upload \
+        --parameter-overrides \
+            Environment="$ENVIRONMENT" \
+            ServiceName="$SERVICE_NAME" \
+            ServiceUrl="${SERVICE_URL}" \
+            NotificationEmail="${NOTIFICATION_EMAIL}" \
+        --no-fail-on-empty-changeset \
+        --confirm-changeset
+fi
 
 echo -e "${YELLOW}📋 Getting deployment information...${NC}"
 OUTPUTS=$(aws cloudformation describe-stacks \
@@ -103,9 +188,4 @@ echo "   - Add the Lambda Function ARN above as an alarm action"
 echo "   - Use descriptive alarm names for better service detection"
 echo "3. Subscribe to the RSS feed for status notifications"
 echo "4. The status page will automatically update every 5 minutes"
-echo ""
-echo -e "${YELLOW}Example CloudWatch alarm configuration:${NC}"
-echo "aws cloudwatch put-metric-alarm \\"
-echo "  --alarm-name \"MyApp-HighErrorRate\" \\"
-echo "  --alarm-actions \"$LAMBDA_FUNCTION_ARN\""
 echo ""

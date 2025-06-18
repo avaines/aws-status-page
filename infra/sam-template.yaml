@@ -52,6 +52,10 @@ Globals:
         STATUS_BUCKET: !Ref StatusPageBucket
         CLOUDFRONT_DISTRIBUTION_ID: !Ref CloudFrontDistribution
         DATA_RETENTION_DAYS: !Ref DataRetentionDays
+    Tags:
+      Environment: !Ref Environment
+      ServiceName: !Ref ServiceName
+      ServiceUrl: !Ref ServiceUrl
 
 Resources:
   # S3 Bucket for hosting the status page (private, accessed only via CloudFront)
@@ -59,6 +63,13 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${AWS::StackName}-status-page-${Environment}'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: ServiceUrl
+          Value: !Ref ServiceUrl
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -95,6 +106,13 @@ Resources:
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: ServiceUrl
+          Value: !Ref ServiceUrl
       DistributionConfig:
         Origins:
           - Id: S3Origin
@@ -185,6 +203,13 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${AWS::StackName}-service-status'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: ServiceUrl
+          Value: !Ref ServiceUrl
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: serviceId
@@ -208,6 +233,13 @@ Resources:
   StatusNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: ServiceUrl
+          Value: !Ref ServiceUrl
       TopicName: !Sub '${AWS::StackName}-status-notifications'
       DisplayName: !Sub '${ServiceName} Status Notifications'
 
@@ -274,8 +306,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-status-generator'
-      CodeUri: lambda/
-      Handler: src/index.handler
+      CodeUri: ../lambda/src/
+      Handler: index.handler
       Role: !GetAtt StatusPageLambdaRole.Arn
       Environment:
         Variables:
@@ -291,8 +323,8 @@ Resources:
         ScheduledUpdate:
           Type: Schedule
           Properties:
-            Schedule: rate(5 minutes)
-            Description: 'Update status page every 5 minutes'
+            Schedule: rate(60 minutes)
+            Description: 'Update status page every hour'
 
   # Custom Resource to create initial status page
   InitialStatusPageCreation:
@@ -303,6 +335,12 @@ Resources:
     DependsOn:
       - StatusPageBucketPolicy
       - CloudFrontDistribution
+
+  StatusPageGeneratorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-status-generator"
+      RetentionInDays: 1
 
 Outputs:
   StatusPageUrl:

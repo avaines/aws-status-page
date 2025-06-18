@@ -5,9 +5,9 @@ const rssProcessor = require('../processors/rssProcessor');
 
 async function handle(event, dependencies) {
   const { s3Client, cloudFrontClient, STATUS_BUCKET, CLOUDFRONT_DISTRIBUTION_ID, SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS } = dependencies;
-  
+
   console.log('Handling CloudFormation custom resource event');
-  
+
   if (event.RequestType === 'Create' || event.RequestType === 'Update') {
     // Create initial status page using template
     const html = htmlProcessor.generateInitial(SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS, CLOUDFRONT_DISTRIBUTION_ID);
@@ -75,7 +75,7 @@ async function invalidateCloudFront(cloudFrontClient, distributionId) {
 
 async function sendCustomResourceResponse(event, responseStatus, responseData) {
   const https = require('https');
-  
+
   const responseBody = JSON.stringify({
     Status: responseStatus,
     Reason: `See the details in CloudWatch Log Stream`,

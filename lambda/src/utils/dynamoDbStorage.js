@@ -1,4 +1,19 @@
-const { ScanCommand, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { ScanCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+
+  // Recursively removes undefined values from the object so that only defined values exit to stored in Dynamo.
+  function removeUndefinedValues(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedValues);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = removeUndefinedValues(value);
+      }
+      return acc;
+    }, {});
+  }
+  return obj;
+}
 
 async function getRecentIncidents(dynamoDbDocClient, statusTable) {
   try {
@@ -19,24 +34,28 @@ async function storeStatusHistory(dynamoDbDocClient, statusTable, services, over
   const timestamp = Date.now();
   const ttlTimestamp = Math.floor(timestamp / 1000) + (dataRetentionDays * 24 * 60 * 60);
 
+  const item = {
+    serviceId: 'overall',
+    timestamp: timestamp,
+    status: overallStatus.status,
+    message: overallStatus.message,
+    services: services,
+    ttl: ttlTimestamp,
+    dataRetentionDays: dataRetentionDays
+  };
+
+  const cleanedItem = removeUndefinedValues(item);
+
   const command = new PutCommand({
     TableName: statusTable,
-    Item: {
-      serviceId: 'overall',
-      timestamp: timestamp,
-      status: overallStatus.status,
-      message: overallStatus.message,
-      services: services,
-      ttl: ttlTimestamp,
-      dataRetentionDays: dataRetentionDays
-    }
+    Item: cleanedItem
   });
 
   try {
     await dynamoDbDocClient.send(command);
     console.log(`Status history stored in DynamoDB with TTL: ${new Date(ttlTimestamp * 1000).toISOString()}`);
   } catch (error) {
-    console.error('Error storing status history:', error);
+    console.error('Error storing status history:', error, JSON.stringify(cleanedItem, null, 2));
   }
 }
 

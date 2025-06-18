@@ -4,7 +4,7 @@ A serverless status page application built with AWS SAM that automatically monit
 
 ## Architecture Overview
 
-![Infrastructure Diagram](docs/infrastructure-diagram.drawio)
+![Infrastructure Diagram](docs/diagram.drawio)
 
 *View the diagram: Open `docs/infrastructure-diagram.drawio` in [Draw.io](https://app.diagrams.net/) or [VS Code with Draw.io extension](https://marketplace.visualstudio.com/items?itemName=hediet.vscode-drawio)*
 

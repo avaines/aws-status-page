@@ -5,10 +5,10 @@
     <description>Real-time status updates for {{serviceName}}{{#if dataRetentionDays}} (Data retained for {{dataRetentionDays}} days){{/if}}</description>
     <link>{{statusPageUrl}}</link>
     <lastBuildDate>{{lastBuildDate}}</lastBuildDate>
-    <language>en-us</language>
+    <language>en-gb</language>
     <generator>AWS Lambda Status Page</generator>
     <ttl>5</ttl>
-    
+
     {{#if isInitialDeploy}}
     <item>
       <title>Status Page Deployed</title>

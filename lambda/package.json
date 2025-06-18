@@ -1,7 +1,9 @@
 {
   "name": "aws-status-page-lambda",
-  "version": "1.0.0",
   "description": "Lambda function for AWS Status Page - generates status pages and RSS feeds",
+  "author": "AWS Status Page",
+  "version": "1.0.0",
+  "license": "MIT",
   "main": "src/index.js",
   "scripts": {
     "test": "jest",
@@ -21,9 +23,6 @@
     "jest": "^29.7.0",
     "@types/jest": "^29.5.8"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "keywords": [
     "aws",
     "lambda",
@@ -31,8 +30,6 @@
     "cloudwatch",
     "monitoring"
   ],
-  "author": "AWS Status Page",
-  "license": "MIT",
   "jest": {
     "testEnvironment": "node",
     "collectCoverageFrom": [

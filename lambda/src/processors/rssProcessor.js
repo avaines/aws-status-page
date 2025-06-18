@@ -6,7 +6,7 @@ const templateEngine = new TemplateEngine();
 function generate(recentIncidents, config) {
   const { SERVICE_NAME, DATA_RETENTION_DAYS, CLOUDFRONT_DISTRIBUTION_ID } = config;
   const now = new Date().toUTCString();
-  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}`;
+  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'example-status-page.com'}`;
 
   // Prepare incidents data for template
   const incidents = recentIncidents.map(item => {
@@ -37,7 +37,7 @@ function generate(recentIncidents, config) {
 function generateInitial(config) {
   const { SERVICE_NAME, CLOUDFRONT_DISTRIBUTION_ID } = config;
   const now = new Date().toUTCString();
-  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}`;
+  const statusPageUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'example-status-page.com'}`;
 
   const templateVariables = {
     serviceName: xmlUtils.escapeXml(SERVICE_NAME),
