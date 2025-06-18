@@ -28,7 +28,7 @@ exports.handler = async (event, context) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
 
   try {
-    // Handle CloudFormation custom resource events
+    // Handle CloudWatch custom resource events
     if (event.RequestType) {
       return await customResourceHandler.handle(event, {
         s3,
