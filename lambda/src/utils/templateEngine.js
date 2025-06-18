@@ -1,6 +1,6 @@
 /**
  * Simple template engine for HTML and XML file processing
- * Supports variable substitution and conditional blocks
+ * Supports variable substitution and conditional blocks, and was easier than including handlebars or EJS in the lambda
  */
 
 const fs = require('fs');
