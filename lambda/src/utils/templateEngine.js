@@ -1,0 +1,88 @@
+/**
+ * Simple template engine for HTML file processing
+ * Supports variable substitution and conditional blocks
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+class TemplateEngine {
+  constructor(templateDir = path.join(__dirname, '../templates')) {
+    this.templateDir = templateDir;
+    this.cache = new Map();
+  }
+
+  /**
+   * Load and process a template file
+   * @param {string} templateName - Name of the template file (without extension)
+   * @param {object} variables - Variables to substitute in the template
+   * @returns {string} Processed template content
+   */
+  render(templateName, variables = {}) {
+    const templatePath = path.join(this.templateDir, `${templateName}.html`);
+    
+    // Load template (with caching in production)
+    let template;
+    if (process.env.NODE_ENV === 'production' && this.cache.has(templateName)) {
+      template = this.cache.get(templateName);
+    } else {
+      try {
+        template = fs.readFileSync(templatePath, 'utf8');
+        if (process.env.NODE_ENV === 'production') {
+          this.cache.set(templateName, template);
+        }
+      } catch (error) {
+        throw new Error(`Template file not found: ${templatePath}`);
+      }
+    }
+
+    // Process template with variables
+    return this.processTemplate(template, variables);
+  }
+
+  /**
+   * Process template string with variable substitution
+   * @param {string} template - Template content
+   * @param {object} variables - Variables to substitute
+   * @returns {string} Processed content
+   */
+  processTemplate(template, variables) {
+    let processed = template;
+
+    // Simple variable substitution: {{variableName}}
+    processed = processed.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+
+    // Conditional blocks: {{#if condition}}...{{/if}}
+    processed = processed.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
+      return variables[condition] ? content : '';
+    });
+
+    // Conditional blocks with else: {{#if condition}}...{{#else}}...{{/if}}
+    processed = processed.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{#else\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, ifContent, elseContent) => {
+      return variables[condition] ? ifContent : elseContent;
+    });
+
+    // Loop blocks: {{#each arrayName}}...{{/each}}
+    processed = processed.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayName, itemTemplate) => {
+      const array = variables[arrayName];
+      if (!Array.isArray(array)) return '';
+      
+      return array.map(item => {
+        return this.processTemplate(itemTemplate, { ...variables, ...item, item });
+      }).join('');
+    });
+
+    return processed;
+  }
+
+  /**
+   * Clear template cache (useful for development)
+   */
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+module.exports = TemplateEngine;
