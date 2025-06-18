@@ -1,12 +1,20 @@
 const rssProcessor = require('../../src/processors/rssProcessor');
 
 // Mock dependencies
+jest.mock('../../src/utils/templateEngine');
 jest.mock('../../src/utils/xmlUtils');
 
+const TemplateEngine = require('../../src/utils/templateEngine');
 const xmlUtils = require('../../src/utils/xmlUtils');
 
 describe('rssProcessor', () => {
+  let mockTemplateEngine;
+
   beforeEach(() => {
+    mockTemplateEngine = {
+      render: jest.fn()
+    };
+    TemplateEngine.mockImplementation(() => mockTemplateEngine);
     xmlUtils.escapeXml = jest.fn().mockImplementation(str => str);
   });
 
@@ -32,15 +40,24 @@ describe('rssProcessor', () => {
         CLOUDFRONT_DISTRIBUTION_ID: 'test-distribution'
       };
 
+      mockTemplateEngine.render.mockReturnValue('<rss>Generated RSS</rss>');
+
       const result = rssProcessor.generate(recentIncidents, config);
 
-      expect(result).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(result).toContain('<title>Test Service - Status Updates</title>');
-      expect(result).toContain('<description>Real-time status updates for Test Service (Data retained for 30 days)</description>');
-      expect(result).toContain('<link>https://test-distribution.cloudfront.net</link>');
-      expect(result).toContain('<item>');
-      expect(result).toContain('<title>test-service: Degraded Performance</title>');
-      expect(result).toContain('<guid isPermaLink="false">test-service-1640995200000</guid>');
+      expect(mockTemplateEngine.render).toHaveBeenCalledWith('rss-feed', expect.objectContaining({
+        serviceName: 'Test Service',
+        dataRetentionDays: 30,
+        statusPageUrl: 'https://test-distribution.cloudfront.net',
+        isInitialDeploy: false,
+        incidents: expect.arrayContaining([
+          expect.objectContaining({
+            title: 'test-service: Degraded Performance',
+            guid: 'test-service-1640995200000'
+          })
+        ])
+      }));
+
+      expect(result).toBe('<rss>Generated RSS</rss>');
     });
 
     it('should generate empty RSS feed without incidents', () => {
@@ -51,11 +68,17 @@ describe('rssProcessor', () => {
         CLOUDFRONT_DISTRIBUTION_ID: 'test-distribution'
       };
 
+      mockTemplateEngine.render.mockReturnValue('<rss>Empty RSS</rss>');
+
       const result = rssProcessor.generate(recentIncidents, config);
 
-      expect(result).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(result).toContain('<title>Test Service - Status Updates</title>');
-      expect(result).not.toContain('<item>');
+      expect(mockTemplateEngine.render).toHaveBeenCalledWith('rss-feed', expect.objectContaining({
+        serviceName: 'Test Service',
+        isInitialDeploy: false,
+        incidents: []
+      }));
+
+      expect(result).toBe('<rss>Empty RSS</rss>');
     });
   });
 
@@ -66,13 +89,19 @@ describe('rssProcessor', () => {
         CLOUDFRONT_DISTRIBUTION_ID: 'test-distribution'
       };
 
+      mockTemplateEngine.render.mockReturnValue('<rss>Initial RSS</rss>');
+
       const result = rssProcessor.generateInitial(config);
 
-      expect(result).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(result).toContain('<title>Test Service - Status Updates</title>');
-      expect(result).toContain('<title>Status Page Deployed</title>');
-      expect(result).toContain('<description>Your AWS status page has been successfully deployed');
-      expect(result).toContain('<guid isPermaLink="false">initial-deployment-');
+      expect(mockTemplateEngine.render).toHaveBeenCalledWith('rss-feed', expect.objectContaining({
+        serviceName: 'Test Service',
+        statusPageUrl: 'https://test-distribution.cloudfront.net',
+        isInitialDeploy: true,
+        deploymentTimestamp: expect.any(Number),
+        incidents: []
+      }));
+
+      expect(result).toBe('<rss>Initial RSS</rss>');
     });
   });
 });

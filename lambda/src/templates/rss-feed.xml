@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>{{serviceName}} - Status Updates</title>
+    <description>Real-time status updates for {{serviceName}}{{#if dataRetentionDays}} (Data retained for {{dataRetentionDays}} days){{/if}}</description>
+    <link>{{statusPageUrl}}</link>
+    <lastBuildDate>{{lastBuildDate}}</lastBuildDate>
+    <language>en-us</language>
+    <generator>AWS Lambda Status Page</generator>
+    <ttl>5</ttl>
+    
+    {{#if isInitialDeploy}}
+    <item>
+      <title>Status Page Deployed</title>
+      <description>Your AWS status page has been successfully deployed and is ready to monitor your services. Configure CloudWatch alarms to start monitoring.</description>
+      <pubDate>{{lastBuildDate}}</pubDate>
+      <link>{{statusPageUrl}}</link>
+      <guid isPermaLink="false">initial-deployment-{{deploymentTimestamp}}</guid>
+    </item>
+    {{#else}}
+    {{#each incidents}}
+    <item>
+      <title>{{title}}</title>
+      <description>{{description}}</description>
+      <pubDate>{{pubDate}}</pubDate>
+      <link>{{statusPageUrl}}</link>
+      <guid isPermaLink="false">{{guid}}</guid>
+    </item>
+    {{/each}}
+    {{/if}}
+  </channel>
+</rss>

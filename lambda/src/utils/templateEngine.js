@@ -1,5 +1,5 @@
 /**
- * Simple template engine for HTML file processing
+ * Simple template engine for HTML and XML file processing
  * Supports variable substitution and conditional blocks
  */
 
@@ -14,22 +14,36 @@ class TemplateEngine {
 
   /**
    * Load and process a template file
-   * @param {string} templateName - Name of the template file (without extension)
+   * @param {string} templateName - Name of the template file (with extension)
    * @param {object} variables - Variables to substitute in the template
    * @returns {string} Processed template content
    */
   render(templateName, variables = {}) {
-    const templatePath = path.join(this.templateDir, `${templateName}.html`);
+    // Determine file extension if not provided
+    let templateFile = templateName;
+    if (!templateName.includes('.')) {
+      // Try common extensions
+      const extensions = ['.html', '.xml', '.txt'];
+      for (const ext of extensions) {
+        const testPath = path.join(this.templateDir, `${templateName}${ext}`);
+        if (fs.existsSync(testPath)) {
+          templateFile = `${templateName}${ext}`;
+          break;
+        }
+      }
+    }
+
+    const templatePath = path.join(this.templateDir, templateFile);
     
     // Load template (with caching in production)
     let template;
-    if (process.env.NODE_ENV === 'production' && this.cache.has(templateName)) {
-      template = this.cache.get(templateName);
+    if (process.env.NODE_ENV === 'production' && this.cache.has(templateFile)) {
+      template = this.cache.get(templateFile);
     } else {
       try {
         template = fs.readFileSync(templatePath, 'utf8');
         if (process.env.NODE_ENV === 'production') {
-          this.cache.set(templateName, template);
+          this.cache.set(templateFile, template);
         }
       } catch (error) {
         throw new Error(`Template file not found: ${templatePath}`);
