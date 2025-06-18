@@ -125,9 +125,14 @@
                 <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-                <h4 class="text-lg font-semibold text-gray-900 mb-2">Waiting for Service Data</h4>
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">{{#if isInitialDeploy}}Waiting for Service Data{{#else}}No Services Detected{{/if}}</h4>
                 <p class="text-gray-600 mb-4">
+                    {{#if isInitialDeploy}}
                     Your status page is ready! Services will appear here automatically when CloudWatch alarms are detected.
+                    {{#else}}
+                    No CloudWatch alarms are currently configured to trigger this status page.
+                    Configure your alarms to include this Lambda function as an action to start monitoring services.
+                    {{/if}}
                 </p>
                 <div class="text-sm text-gray-500">
                     <p class="font-medium mb-2">To start monitoring your services:</p>
@@ -138,7 +143,7 @@
                                 {{lambdaFunctionArn}}
                             </code>
                         </li>
-                        <li>Services will automatically appear on the next alarm state change</li>
+                        <li>{{#if isInitialDeploy}}Services will automatically appear on the next alarm state change{{#else}}The status page will automatically update when alarms trigger{{/if}}</li>
                     </ol>
                 </div>
             </div>

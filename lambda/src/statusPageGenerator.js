@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
-const htmlTemplate = require('./templates/htmlTemplate');
-const rssTemplate = require('./templates/rssTemplate');
+const htmlProcessor = require('./processors/htmlProcessor');
+const rssProcessor = require('./processors/rssProcessor');
 const customResourceHandler = require('./handlers/customResourceHandler');
 const alarmProcessor = require('./processors/alarmProcessor');
 const statusCalculator = require('./utils/statusCalculator');
@@ -55,14 +55,14 @@ exports.handler = async (event, context) => {
     const recentIncidents = await dynamoDbStorage.getRecentIncidents(dynamodb, STATUS_TABLE);
 
     // Generate HTML page and RSS feed
-    const html = htmlTemplate.generate(services, overallStatus, recentIncidents, {
+    const html = htmlProcessor.generate(services, overallStatus, recentIncidents, {
       SERVICE_NAME,
       SERVICE_URL,
       DATA_RETENTION_DAYS,
       CLOUDFRONT_DISTRIBUTION_ID
     });
 
-    const rssXml = rssTemplate.generate(recentIncidents, {
+    const rssXml = rssProcessor.generate(recentIncidents, {
       SERVICE_NAME,
       DATA_RETENTION_DAYS,
       CLOUDFRONT_DISTRIBUTION_ID

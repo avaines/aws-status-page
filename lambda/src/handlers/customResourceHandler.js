@@ -1,9 +1,7 @@
-const TemplateEngine = require('../utils/templateEngine');
-const rssTemplate = require('../templates/rssTemplate');
+const htmlProcessor = require('../processors/htmlProcessor');
+const rssProcessor = require('../processors/rssProcessor');
 const s3Uploader = require('../utils/s3Uploader');
 const cloudFrontInvalidator = require('../utils/cloudFrontInvalidator');
-
-const templateEngine = new TemplateEngine();
 
 async function handle(event, dependencies) {
   const { s3, cloudfront, STATUS_BUCKET, CLOUDFRONT_DISTRIBUTION_ID, SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS } = dependencies;
@@ -12,22 +10,8 @@ async function handle(event, dependencies) {
   
   if (event.RequestType === 'Create' || event.RequestType === 'Update') {
     // Create initial status page using template
-    const timestamp = new Date().toLocaleString();
-    const rssUrl = `https://${CLOUDFRONT_DISTRIBUTION_ID ? `${CLOUDFRONT_DISTRIBUTION_ID}.cloudfront.net` : 'your-status-page.com'}/rss.xml`;
-
-    const templateVariables = {
-      serviceName: SERVICE_NAME,
-      serviceUrl: SERVICE_URL,
-      rssUrl: rssUrl,
-      timestamp: timestamp,
-      dataRetentionDays: DATA_RETENTION_DAYS,
-      lambdaFunctionArn: process.env.AWS_LAMBDA_FUNCTION_NAME ? 
-        `arn:aws:lambda:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID || 'YOUR_ACCOUNT'}:function:${process.env.AWS_LAMBDA_FUNCTION_NAME}` : 
-        'Function ARN will appear here after deployment'
-    };
-
-    const html = templateEngine.render('initial-status-page', templateVariables);
-    const rssXml = rssTemplate.generateInitial({
+    const html = htmlProcessor.generateInitial(SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS, CLOUDFRONT_DISTRIBUTION_ID);
+    const rssXml = rssProcessor.generateInitial({
       SERVICE_NAME,
       CLOUDFRONT_DISTRIBUTION_ID
     });

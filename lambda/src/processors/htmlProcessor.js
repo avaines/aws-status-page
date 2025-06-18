@@ -52,6 +52,7 @@ function generate(services, overallStatus, recentIncidents, config) {
     services: enhancedServices,
     serviceCount: services.length,
     serviceCountPlural: services.length !== 1 ? 's' : '',
+    isInitialDeploy: false,
     
     // Lambda function ARN for setup instructions
     lambdaFunctionArn: process.env.AWS_LAMBDA_FUNCTION_NAME ? 
@@ -72,12 +73,28 @@ function generateInitial(serviceName, serviceUrl, dataRetentionDays, cloudFrontD
     rssUrl: rssUrl,
     timestamp: timestamp,
     dataRetentionDays: dataRetentionDays,
+    
+    // Overall status for initial deploy (always operational)
+    overallStatusColor: 'text-green-600',
+    overallStatusBgColor: 'bg-green-50',
+    overallStatusBorderColor: 'border-green-200',
+    overallStatusLabel: 'All Systems Operational',
+    overallStatusMessage: 'Status page has been successfully deployed and is ready to monitor your services.',
+    overallStatusIcon: iconUtils.getStatusIcon('operational'),
+    
+    // No services initially
+    hasServices: false,
+    services: [],
+    serviceCount: 0,
+    serviceCountPlural: 's',
+    isInitialDeploy: true,
+    
     lambdaFunctionArn: process.env.AWS_LAMBDA_FUNCTION_NAME ? 
       `arn:aws:lambda:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID || 'YOUR_ACCOUNT'}:function:${process.env.AWS_LAMBDA_FUNCTION_NAME}` : 
       'Function ARN will appear here after deployment'
   };
 
-  return templateEngine.render('initial-status-page', templateVariables);
+  return templateEngine.render('status-page', templateVariables);
 }
 
 function getAlarmStateClass(state) {
