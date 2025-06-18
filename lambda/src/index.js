@@ -1,4 +1,10 @@
 const AWS = require('aws-sdk');
+const s3 = new AWS.S3();
+const cloudwatch = new AWS.CloudWatch();
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const sns = new AWS.SNS();
+const cloudfront = new AWS.CloudFront();
+
 const htmlProcessor = require('./processors/htmlProcessor');
 const rssProcessor = require('./processors/rssProcessor');
 const customResourceHandler = require('./handlers/customResourceHandler');
@@ -8,12 +14,6 @@ const s3Uploader = require('./utils/s3Uploader');
 const cloudFrontInvalidator = require('./utils/cloudFrontInvalidator');
 const dynamoDbStorage = require('./utils/dynamoDbStorage');
 const snsNotifier = require('./utils/snsNotifier');
-
-const s3 = new AWS.S3();
-const cloudwatch = new AWS.CloudWatch();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const sns = new AWS.SNS();
-const cloudfront = new AWS.CloudFront();
 
 const STATUS_BUCKET = process.env.STATUS_BUCKET;
 const STATUS_TABLE = process.env.STATUS_TABLE;
