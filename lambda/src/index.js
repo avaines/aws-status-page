@@ -1,9 +1,9 @@
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3();
-const cloudwatch = new AWS.CloudWatch();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const sns = new AWS.SNS();
-const cloudfront = new AWS.CloudFront();
+const { S3Client } = require('@aws-sdk/client-s3');
+const { CloudWatchClient } = require('@aws-sdk/client-cloudwatch');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+const { SNSClient } = require('@aws-sdk/client-sns');
+const { CloudFrontClient } = require('@aws-sdk/client-cloudfront');
 
 const htmlProcessor = require('./processors/htmlProcessor');
 const rssProcessor = require('./processors/rssProcessor');
@@ -15,6 +15,14 @@ const cloudFrontInvalidator = require('./utils/cloudFrontInvalidator');
 const dynamoDbStorage = require('./utils/dynamoDbStorage');
 const snsNotifier = require('./utils/snsNotifier');
 
+// Initialize AWS SDK v3 clients
+const s3Client = new S3Client({ region: process.env.AWS_REGION });
+const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION });
+const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const dynamoDbDocClient = DynamoDBDocumentClient.from(dynamoDbClient);
+const snsClient = new SNSClient({ region: process.env.AWS_REGION });
+const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
+
 const STATUS_BUCKET = process.env.STATUS_BUCKET;
 const STATUS_TABLE = process.env.STATUS_TABLE;
 const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;
@@ -23,16 +31,15 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'My Service';
 const SERVICE_URL = process.env.SERVICE_URL || 'https://example.com';
 const DATA_RETENTION_DAYS = parseInt(process.env.DATA_RETENTION_DAYS) || 30;
 
-
 exports.handler = async (event, context) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
 
   try {
-    // Handle CloudWatch custom resource events
+    // Handle CloudFormation custom resource events
     if (event.RequestType) {
       return await customResourceHandler.handle(event, {
-        s3,
-        cloudfront,
+        s3Client,
+        cloudFrontClient,
         STATUS_BUCKET,
         CLOUDFRONT_DISTRIBUTION_ID,
         SERVICE_NAME,
@@ -42,7 +49,7 @@ exports.handler = async (event, context) => {
     }
 
     // Get all CloudWatch alarms that have actions pointing to our Lambda function
-    const alarms = await alarmProcessor.getAllRelevantAlarms(cloudwatch, process.env.AWS_LAMBDA_FUNCTION_NAME, SNS_TOPIC_ARN);
+    const alarms = await alarmProcessor.getAllRelevantAlarms(cloudWatchClient, process.env.AWS_LAMBDA_FUNCTION_NAME, SNS_TOPIC_ARN);
     console.log(`Found ${alarms.length} relevant CloudWatch alarms`);
 
     // Process alarms and create service status
@@ -53,7 +60,7 @@ exports.handler = async (event, context) => {
     const overallStatus = statusCalculator.calculateOverallStatus(services);
 
     // Get recent incidents from DynamoDB
-    const recentIncidents = await dynamoDbStorage.getRecentIncidents(dynamodb, STATUS_TABLE);
+    const recentIncidents = await dynamoDbStorage.getRecentIncidents(dynamoDbDocClient, STATUS_TABLE);
 
     // Generate HTML page and RSS feed
     const html = htmlProcessor.generate(services, overallStatus, recentIncidents, {
@@ -71,20 +78,20 @@ exports.handler = async (event, context) => {
 
     // Upload both HTML and RSS to S3
     await Promise.all([
-      s3Uploader.upload(s3, STATUS_BUCKET, 'index.html', html, 'text/html'),
-      s3Uploader.upload(s3, STATUS_BUCKET, 'rss.xml', rssXml, 'application/rss+xml')
+      s3Uploader.upload(s3Client, STATUS_BUCKET, 'index.html', html, 'text/html'),
+      s3Uploader.upload(s3Client, STATUS_BUCKET, 'rss.xml', rssXml, 'application/rss+xml')
     ]);
 
     // Invalidate CloudFront cache
-    await cloudFrontInvalidator.invalidate(cloudfront, CLOUDFRONT_DISTRIBUTION_ID);
+    await cloudFrontInvalidator.invalidate(cloudFrontClient, CLOUDFRONT_DISTRIBUTION_ID);
 
     // Store status in DynamoDB with TTL
-    await dynamoDbStorage.storeStatusHistory(dynamodb, STATUS_TABLE, services, overallStatus, DATA_RETENTION_DAYS);
+    await dynamoDbStorage.storeStatusHistory(dynamoDbDocClient, STATUS_TABLE, services, overallStatus, DATA_RETENTION_DAYS);
 
     // Send notifications if status changed
     await snsNotifier.checkAndNotifyStatusChange(
-      dynamodb, 
-      sns, 
+      dynamoDbDocClient, 
+      snsClient, 
       STATUS_TABLE, 
       SNS_TOPIC_ARN, 
       overallStatus, 

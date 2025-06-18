@@ -1,18 +1,19 @@
+const { DescribeAlarmsCommand } = require('@aws-sdk/client-cloudwatch');
 const statusConfig = require('../config/statusConfig');
 const timeUtils = require('../utils/timeUtils');
 
-async function getAllRelevantAlarms(cloudwatch, lambdaFunctionName, snsTopicArn) {
+async function getAllRelevantAlarms(cloudWatchClient, lambdaFunctionName, snsTopicArn) {
   const allAlarms = [];
   let nextToken = null;
 
   do {
-    const params = {
+    const command = new DescribeAlarmsCommand({
       MaxRecords: 100,
       ...(nextToken && { NextToken: nextToken })
-    };
+    });
 
     try {
-      const result = await cloudwatch.describeAlarms(params).promise();
+      const result = await cloudWatchClient.send(command);
 
       // Filter alarms that have our Lambda function as an action
       const relevantAlarms = result.MetricAlarms.filter(alarm => {
@@ -38,7 +39,8 @@ async function getAllRelevantAlarms(cloudwatch, lambdaFunctionName, snsTopicArn)
   if (allAlarms.length === 0) {
     console.log('No alarms found with Lambda function as action, fetching all alarms for demo');
     try {
-      const result = await cloudwatch.describeAlarms({ MaxRecords: 50 }).promise();
+      const command = new DescribeAlarmsCommand({ MaxRecords: 50 });
+      const result = await cloudWatchClient.send(command);
       return result.MetricAlarms || [];
     } catch (error) {
       console.error('Error fetching all alarms:', error);

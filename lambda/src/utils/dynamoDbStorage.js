@@ -1,12 +1,13 @@
-async function getRecentIncidents(dynamodb, statusTable) {
-  try {
-    const params = {
-      TableName: statusTable,
-      ScanIndexForward: false,
-      Limit: 10
-    };
+const { ScanCommand, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 
-    const result = await dynamodb.scan(params).promise();
+async function getRecentIncidents(dynamoDbDocClient, statusTable) {
+  try {
+    const command = new ScanCommand({
+      TableName: statusTable,
+      Limit: 10
+    });
+
+    const result = await dynamoDbDocClient.send(command);
     return (result.Items || []).sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
     console.error('Error fetching recent incidents:', error);
@@ -14,11 +15,11 @@ async function getRecentIncidents(dynamodb, statusTable) {
   }
 }
 
-async function storeStatusHistory(dynamodb, statusTable, services, overallStatus, dataRetentionDays) {
+async function storeStatusHistory(dynamoDbDocClient, statusTable, services, overallStatus, dataRetentionDays) {
   const timestamp = Date.now();
   const ttlTimestamp = Math.floor(timestamp / 1000) + (dataRetentionDays * 24 * 60 * 60);
 
-  const params = {
+  const command = new PutCommand({
     TableName: statusTable,
     Item: {
       serviceId: 'overall',
@@ -29,10 +30,10 @@ async function storeStatusHistory(dynamodb, statusTable, services, overallStatus
       ttl: ttlTimestamp,
       dataRetentionDays: dataRetentionDays
     }
-  };
+  });
 
   try {
-    await dynamodb.put(params).promise();
+    await dynamoDbDocClient.send(command);
     console.log(`Status history stored in DynamoDB with TTL: ${new Date(ttlTimestamp * 1000).toISOString()}`);
   } catch (error) {
     console.error('Error storing status history:', error);

@@ -1,10 +1,12 @@
-async function invalidate(cloudfront, distributionId) {
+const { CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
+
+async function invalidate(cloudFrontClient, distributionId) {
   if (!distributionId) {
     console.log('No CloudFront distribution ID provided, skipping invalidation');
     return;
   }
 
-  const params = {
+  const command = new CreateInvalidationCommand({
     DistributionId: distributionId,
     InvalidationBatch: {
       Paths: {
@@ -13,10 +15,10 @@ async function invalidate(cloudfront, distributionId) {
       },
       CallerReference: Date.now().toString()
     }
-  };
+  });
 
   try {
-    await cloudfront.createInvalidation(params).promise();
+    await cloudFrontClient.send(command);
     console.log('CloudFront cache invalidated for both HTML and RSS');
   } catch (error) {
     console.error('Error invalidating CloudFront cache:', error);

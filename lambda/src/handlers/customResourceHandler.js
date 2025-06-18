@@ -1,10 +1,10 @@
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const { CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
 const htmlProcessor = require('../processors/htmlProcessor');
 const rssProcessor = require('../processors/rssProcessor');
-const s3Uploader = require('../utils/s3Uploader');
-const cloudFrontInvalidator = require('../utils/cloudFrontInvalidator');
 
 async function handle(event, dependencies) {
-  const { s3, cloudfront, STATUS_BUCKET, CLOUDFRONT_DISTRIBUTION_ID, SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS } = dependencies;
+  const { s3Client, cloudFrontClient, STATUS_BUCKET, CLOUDFRONT_DISTRIBUTION_ID, SERVICE_NAME, SERVICE_URL, DATA_RETENTION_DAYS } = dependencies;
   
   console.log('Handling CloudFormation custom resource event');
   
@@ -18,13 +18,13 @@ async function handle(event, dependencies) {
 
     // Upload both HTML and RSS to S3
     await Promise.all([
-      s3Uploader.upload(s3, STATUS_BUCKET, 'index.html', html, 'text/html'),
-      s3Uploader.upload(s3, STATUS_BUCKET, 'rss.xml', rssXml, 'application/rss+xml')
+      uploadToS3(s3Client, STATUS_BUCKET, 'index.html', html, 'text/html'),
+      uploadToS3(s3Client, STATUS_BUCKET, 'rss.xml', rssXml, 'application/rss+xml')
     ]);
 
     // Invalidate CloudFront cache if distribution exists
     if (CLOUDFRONT_DISTRIBUTION_ID) {
-      await cloudFrontInvalidator.invalidate(cloudfront, CLOUDFRONT_DISTRIBUTION_ID);
+      await invalidateCloudFront(cloudFrontClient, CLOUDFRONT_DISTRIBUTION_ID);
     }
 
     await sendCustomResourceResponse(event, 'SUCCESS', {
@@ -38,6 +38,39 @@ async function handle(event, dependencies) {
   }
 
   return { statusCode: 200 };
+}
+
+async function uploadToS3(s3Client, bucket, key, content, contentType) {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: content,
+    ContentType: contentType,
+    CacheControl: contentType === 'text/html' ? 'max-age=300' : 'max-age=3600'
+  });
+
+  await s3Client.send(command);
+  console.log(`${key} uploaded to S3`);
+}
+
+async function invalidateCloudFront(cloudFrontClient, distributionId) {
+  const command = new CreateInvalidationCommand({
+    DistributionId: distributionId,
+    InvalidationBatch: {
+      Paths: {
+        Quantity: 2,
+        Items: ['/index.html', '/rss.xml']
+      },
+      CallerReference: Date.now().toString()
+    }
+  });
+
+  try {
+    await cloudFrontClient.send(command);
+    console.log('CloudFront cache invalidated for both HTML and RSS');
+  } catch (error) {
+    console.error('Error invalidating CloudFront cache:', error);
+  }
 }
 
 async function sendCustomResourceResponse(event, responseStatus, responseData) {

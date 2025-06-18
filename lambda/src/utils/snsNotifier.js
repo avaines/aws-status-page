@@ -1,8 +1,10 @@
+const { QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { PublishCommand } = require('@aws-sdk/client-sns');
 const statusConfig = require('../config/statusConfig');
 
-async function checkAndNotifyStatusChange(dynamodb, sns, statusTable, snsTopicArn, currentStatus, serviceName, dataRetentionDays, cloudFrontDistributionId) {
+async function checkAndNotifyStatusChange(dynamoDbDocClient, snsClient, statusTable, snsTopicArn, currentStatus, serviceName, dataRetentionDays, cloudFrontDistributionId) {
   try {
-    const params = {
+    const command = new QueryCommand({
       TableName: statusTable,
       KeyConditionExpression: 'serviceId = :serviceId',
       ExpressionAttributeValues: {
@@ -10,15 +12,15 @@ async function checkAndNotifyStatusChange(dynamodb, sns, statusTable, snsTopicAr
       },
       ScanIndexForward: false,
       Limit: 2
-    };
+    });
 
-    const result = await dynamodb.query(params).promise();
+    const result = await dynamoDbDocClient.send(command);
 
     if (result.Items && result.Items.length >= 2) {
       const lastStatus = result.Items[1].status;
 
       if (lastStatus !== currentStatus.status) {
-        await sendStatusChangeNotification(sns, snsTopicArn, lastStatus, currentStatus, serviceName, dataRetentionDays, cloudFrontDistributionId);
+        await sendStatusChangeNotification(snsClient, snsTopicArn, lastStatus, currentStatus, serviceName, dataRetentionDays, cloudFrontDistributionId);
       }
     }
   } catch (error) {
@@ -26,7 +28,7 @@ async function checkAndNotifyStatusChange(dynamodb, sns, statusTable, snsTopicAr
   }
 }
 
-async function sendStatusChangeNotification(sns, snsTopicArn, oldStatus, newStatus, serviceName, dataRetentionDays, cloudFrontDistributionId) {
+async function sendStatusChangeNotification(snsClient, snsTopicArn, oldStatus, newStatus, serviceName, dataRetentionDays, cloudFrontDistributionId) {
   const message = `${serviceName} Status Change Alert
 
 Previous Status: ${statusConfig.STATUS_CONFIG[oldStatus]?.label || oldStatus}
@@ -39,14 +41,14 @@ Data Retention: ${dataRetentionDays} days
 
 View status page: https://${cloudFrontDistributionId ? `${cloudFrontDistributionId}.cloudfront.net` : 'your-status-page.com'}`;
 
-  const params = {
+  const command = new PublishCommand({
     TopicArn: snsTopicArn,
     Subject: `${serviceName} - Status Changed to ${statusConfig.STATUS_CONFIG[newStatus.status]?.label || newStatus.status}`,
     Message: message
-  };
+  });
 
   try {
-    await sns.publish(params).promise();
+    await snsClient.send(command);
     console.log('Status change notification sent');
   } catch (error) {
     console.error('Error sending notification:', error);
