@@ -92,7 +92,7 @@ class TemplateEngine {
   }
 
   /**
-   * Clear template cache (useful for development)
+   * Clear template cache (for dev use)
    */
   clearCache() {
     this.cache.clear();
