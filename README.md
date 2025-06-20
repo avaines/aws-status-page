@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/avaines/aws-status-page.svg)](https://github.com/avaines/aws-status-page/blob/main/LICENSE)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/avaines/aws-status-page/total)
 
-A serverless status page application built with AWS SAM that automatically monitors your AWS services and displays their health status in a beautiful, production-ready web interface. Use your existing Cloudwatch composite alarms representing your core service elements to give your user base an insight into the services.
+A serverless status page application built with AWS SAM that automatically monitors your AWS services and displays their health status in a web interface or RSS feed. Use your existing Cloudwatch composite alarms representing your core service elements to give your user base an insight into the services.
 
 ## Architecture Overview
 
