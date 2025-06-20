@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{serviceName}} - Service Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="description" content="Real-time status updates for {{serviceName}} services">
+    <meta name="robots" content="index, follow">
+    <link rel="alternate" type="application/rss+xml" title="{{serviceName}} Status Updates" href="/rss.xml">
+</head>
+<body class="flex flex-col min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <h1 class="text-xl font-bold text-gray-900">{{serviceName}} Status</h1>
+                </div>
+
+                <nav class="flex items-center space-x-6">
+                    <a href="/rss.xml" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"/>
+                        </svg>
+                        <span class="text-sm font-medium">RSS Feed</span>
+                    </a>
+                    <a href="{{serviceUrl}}" class="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors duration-200">
+                        <span class="text-sm font-medium">Visit Service</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Overall Status -->
+        <div class="rounded-lg border {{overallStatusBorderColor}} {{overallStatusBgColor}} p-6 mb-8">
+            <div class="flex items-center space-x-3">
+                <div class="w-6 h-6 {{overallStatusColor}}">
+                    {{overallStatusIcon}}
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold {{overallStatusColor}}">
+                        {{overallStatusLabel}}
+                    </h2>
+                    <p class="text-gray-700 mt-1">{{overallStatusMessage}}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Grid -->
+        <div class="space-y-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-bold text-gray-900">Service Status</h3>
+
+            </div>
+
+            {{#if hasServices}}
+            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {{#each services}}
+                <div class="bg-white rounded-lg border {{borderColor}} p-5 hover:shadow-md transition-all duration-200">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 rounded-md {{bgColor}}">
+                                {{serviceIcon}}
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900">{{name}}</h4>
+                                <p class="text-sm text-gray-600 mt-1">{{description}}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 {{color}}">
+                                {{statusIcon}}
+                            </div>
+                            <span class="text-sm font-medium {{color}}">
+                                {{statusLabel}}
+                            </span>
+                        </div>
+                        <span class="text-xs text-gray-500">
+                            Updated {{lastUpdated}}
+                        </span>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+            {{#else}}
+            <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">{{#if isInitialDeploy}}Waiting for Service Data{{#else}}No Services Detected{{/if}}</h4>
+                <p class="text-gray-600 mb-4">
+                    {{#if isInitialDeploy}}
+                    Your status page is ready! Services will appear here automatically when CloudWatch alarms are detected.
+                    {{#else}}
+                    No CloudWatch alarms are currently configured to trigger this status page.
+                    Configure your alarms to include this Lambda function as an action to start monitoring services.
+                    {{/if}}
+                </p>
+                <div class="text-sm text-gray-500">
+                    <p class="font-medium mb-2">To start monitoring your services:</p>
+                    <ol class="list-decimal list-inside space-y-1 text-left max-w-md mx-auto">
+                        <li>Create CloudWatch alarms for your AWS services</li>
+                        <li>Add this Lambda function ARN as an alarm action:
+                            <code class="block bg-gray-100 px-2 py-1 rounded mt-1 text-xs break-all">
+                                {{lambdaFunctionArn}}
+                            </code>
+                        </li>
+                        <li>{{#if isInitialDeploy}}Services will automatically appear on the next alarm state change{{#else}}The status page will automatically update when alarms trigger{{/if}}</li>
+                    </ol>
+                </div>
+            </div>
+            {{/if}}
+        </div>
+
+        {{#if hasRecentIncidents}}
+        <div class="mt-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h3>
+            <div class="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+                {{#each recentIncidents}}
+                <div class="p-6">
+                    <div class="flex items-start space-x-3">
+                        <div class="flex-shrink-0">
+                            <div class="w-2 h-2 {{statusDotColor}} rounded-full mt-2"></div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900">
+                                {{title}}
+                            </p>
+                            <p class="text-sm text-gray-600 mt-1">
+                                {{description}}
+                            </p>
+                            <p class="text-xs text-gray-500 mt-2">
+                                {{formattedTimestamp}}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+        {{#else}}
+            {{#if hasServices}}
+                <div class="mt-12">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h3>
+                    <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                        <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">No Recent Activity</h4>
+                        <p class="text-gray-600">
+                            Status changes and incidents will appear here as they occur. All systems are currently stable.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <div class="flex items-start space-x-3">
+                        <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div>
+                            <h4 class="text-sm font-semibold text-blue-900 mb-2">
+                                Dynamic Service Detection
+                            </h4>
+                            <p class="text-sm text-blue-800 mb-3">
+                                This status page automatically discovers services by scanning CloudWatch alarms that have this Lambda function configured as an action. Services shown above are detected from your actual AWS infrastructure.
+                            </p>
+                            <div class="text-xs text-blue-700">
+                                <p class="font-medium mb-1">To add new services to monitoring:</p>
+                                <ol class="list-decimal list-inside space-y-1">
+                                    <li>Create CloudWatch alarms for your services</li>
+                                    <li>Add this Lambda function ARN as an alarm action</li>
+                                    <li>Services will automatically appear on the next update</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{/if}}
+        {{/if}}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-16">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-600">
+                    Last updated: {{timestamp}} | Monitoring {{serviceCount}} service{{serviceCountPlural}} | Data retained for {{dataRetentionDays}} days
+                </p>
+                <div class="flex items-center space-x-4">
+                    <a href="{{serviceUrl}}" class="text-sm text-gray-600 hover:text-gray-900">
+                        Visit Service
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
