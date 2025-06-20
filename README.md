@@ -1,8 +1,8 @@
 # AWS Service Status Page
 
 [![Status](https://github.com/avaines/s3tree/actions/workflows/main.yml/badge.svg)](https://github.com/avaines/s3tree/actions/workflows/main.yml)
-[![release](https://img.shields.io/github/release/avaines/aws-status-page.svg)](https://github.com/avaines/aws-status-page/releases)
-[![license](https://img.shields.io/github/license/avaines/aws-status-page.svg)](https://github.com/avaines/aws-status-page/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/release/avaines/aws-status-page.svg)](https://github.com/avaines/aws-status-page/releases)
+[![License](https://img.shields.io/github/license/avaines/aws-status-page.svg)](https://github.com/avaines/aws-status-page/blob/main/LICENSE)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/avaines/aws-status-page/total)
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/avaines/aws-status-page/latest/total)
 
